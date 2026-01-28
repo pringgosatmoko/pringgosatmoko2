@@ -6,12 +6,13 @@ const win = window as any;
 win.process = win.process || {};
 win.process.env = win.process.env || {};
 
+// Fungsi sakti untuk mengambil Env dari segala arah
 const getEnv = (key: string) => {
   const metaEnv = (import.meta as any).env || {};
   return win.process?.env?.[key] || metaEnv[key] || "";
 };
 
-// Inisialisasi awal API_KEY ke global process.env agar library Google bisa membacanya
+// Pasang API_KEY secara global agar terbaca oleh SDK GoogleGenAI
 if (!win.process.env.API_KEY) {
   win.process.env.API_KEY = getEnv('VITE_GEMINI_API_1');
 }
@@ -26,8 +27,8 @@ export const getSupabase = () => {
   const key = getEnv('VITE_SUPABASE_ANON');
 
   if (!url || !url.startsWith('http')) {
-    console.warn("API Node: Database URL belum terdeteksi. Menggunakan mode standby.");
-    return createClient("https://dummy-access.supabase.co", "dummy-key");
+    console.warn("API Node: Database URL belum terdeteksi.");
+    return createClient("https://dummy.access.supabase.co", "dummy-key");
   }
 
   supabaseInstance = createClient(url, key);
@@ -47,20 +48,14 @@ export const initMidtransPayment = async (email: string, amount: number, plan: s
   const orderId = `SAT-MID-${Date.now()}`;
   const serverId = getEnv('VITE_MIDTRANS_SERVER_ID'); 
   
-  await supabase.from('topup_requests').insert([{
-    tid: orderId,
-    email: email.toLowerCase(),
-    amount: plan === '1B' ? 1000 : plan === '3B' ? 3500 : 15000,
-    price: amount,
-    status: 'waiting_payment'
-  }]);
-
   if (!serverId) {
-    return { success: false, error: "Error: VITE_MIDTRANS_SERVER_ID tidak ditemukan di Vercel." };
+    return { success: false, error: "VITE_MIDTRANS_SERVER_ID_KOSONG" };
   }
 
   try {
     const authHeader = `Basic ${btoa(serverId + ":")}`;
+    
+    // Gunakan try-catch super ketat untuk mendeteksi Failed to Fetch
     const response = await fetch('https://app.sandbox.midtrans.com/snap/v1/transactions', {
       method: 'POST',
       headers: {
@@ -75,10 +70,27 @@ export const initMidtransPayment = async (email: string, amount: number, plan: s
       })
     });
 
+    if (!response.ok) {
+      const errorData = await response.json();
+      return { success: false, error: `API_ERROR: ${errorData.error_messages?.[0] || 'Unknown'}` };
+    }
+
     const data = await response.json();
-    return data.token ? { success: true, orderId, snapToken: data.token } : { success: false, error: data.error_messages?.join(", ") };
+    
+    // Jika fetch berhasil, simpan record ke Supabase
+    await supabase.from('topup_requests').insert([{
+      tid: orderId,
+      email: email.toLowerCase(),
+      amount: plan === '1B' ? 1000 : plan === '3B' ? 3500 : 15000,
+      price: amount,
+      status: 'waiting_payment'
+    }]);
+
+    return { success: true, orderId, snapToken: data.token };
   } catch (err: any) {
-    return { success: false, error: `Gateway Error: ${err.message}` };
+    // Ini biasanya terjadi karena CORS di browser atau koneksi terputus
+    console.error("Fetch Failure:", err);
+    return { success: false, error: `GATEWAY_CORS_ERROR: Master, API Midtrans Sandbox sering memblokir browser. Gunakan mode Admin atau cek whitelist.` };
   }
 };
 

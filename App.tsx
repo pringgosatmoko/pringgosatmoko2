@@ -157,6 +157,7 @@ const App: React.FC = () => {
     }
   }, [userEmail]);
 
+  // Logika Pemulihan Sesi Master
   useEffect(() => {
     const checkInitialSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -171,13 +172,14 @@ const App: React.FC = () => {
     checkInitialSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session?.user?.email) {
+      if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user?.email) {
         setUserEmail(session.user.email);
         setIsLoggedIn(true);
         refreshUserData(session.user.email);
       } else if (event === 'SIGNED_OUT') {
         setIsLoggedIn(false);
         setUserEmail('');
+        setUserCredits(0);
         setActiveFeature('menu');
       }
     });
@@ -323,12 +325,12 @@ const App: React.FC = () => {
                   <SideIcon active={activeFeature === 'profile'} icon="fa-user-shield" onClick={() => setActiveFeature('profile')} label={t.profile} />
                 </nav>
                 <div className="mt-auto space-y-4">
-                  {/* Logout Paten di Sidebar */}
+                  {/* Logout Paten di Sidebar Desktop */}
                   <button 
                     onClick={handleLogout}
                     className="w-full py-4 rounded-2xl border border-red-500/20 bg-red-500/5 text-red-500 hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-4 text-[9px] font-bold uppercase tracking-widest active:scale-95"
                   >
-                    <i className="fa-solid fa-power-off"></i> KELUAR SISTEM
+                    <i className="fa-solid fa-power-off"></i> {t.logout} SISTEM
                   </button>
                   <p className="text-[7px] text-slate-700 text-center font-bold uppercase tracking-[0.3em]">Copyright by Satmoko</p>
                 </div>
@@ -336,8 +338,8 @@ const App: React.FC = () => {
 
              {/* MAIN AREA */}
              <main className="flex-1 overflow-y-auto no-scrollbar relative flex flex-col">
-                {/* Header Global yang Selalu Ada di Setiap Fitur */}
-                <header className="sticky top-0 z-[200] glass-panel border-b border-white/5 bg-[#020617]/90 px-4 lg:px-12 py-4 flex items-center justify-between shadow-lg">
+                {/* Header Global Tetap Ada Di Mana Saja */}
+                <header className="sticky top-0 z-[200] glass-panel border-b border-white/5 bg-[#020617]/90 px-4 lg:px-12 py-4 flex items-center justify-between shadow-2xl">
                    <div className="flex items-center gap-4 lg:hidden">
                       <div onClick={() => setActiveFeature('menu')} className="w-8 h-8 rounded-lg bg-cyan-500 flex items-center justify-center text-black font-bold text-xs cursor-pointer shadow-lg active:scale-90">S</div>
                       <span className="text-[10px] font-bold uppercase tracking-widest">DASHBOARD</span>
@@ -347,7 +349,7 @@ const App: React.FC = () => {
                    </div>
                    
                    <div className="flex items-center gap-3">
-                      {/* Logout Paten di Header Pojok Kanan */}
+                      {/* Logout Paten di Header Pojok Kanan untuk Member & Admin */}
                       <button 
                         onClick={handleLogout}
                         className="group flex items-center gap-3 bg-red-500/10 hover:bg-red-500 border border-red-500/20 hover:border-red-400 px-4 py-2 lg:px-6 lg:py-2.5 rounded-xl transition-all shadow-xl active:scale-95"
