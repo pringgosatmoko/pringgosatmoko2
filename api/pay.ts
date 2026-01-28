@@ -1,6 +1,9 @@
+
 // Vercel Serverless Function - Master Stable Bridge (Node.js Runtime)
+import { Buffer } from 'buffer';
+
 export default async function handler(req, res) {
-  // Tambahkan Header CORS secara manual untuk keamanan ekstra di mobile
+  // Tambahkan Header CORS secara manual untuk keamanan ekstra
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -27,11 +30,12 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'SERVER_ID_MISSING' });
     }
 
-    // Fix: Use btoa instead of Buffer to avoid 'Cannot find name Buffer' error in TypeScript
-    const authHeader = `Basic ${btoa(serverId + ":")}`;
+    // Gunakan Buffer: Cara paling aman di Node.js untuk menghindari crash
+    // @fix: Explicitly import Buffer from 'buffer' and use it to encode credentials
+    const authHeader = `Basic ${Buffer.from(serverId + ":").toString('base64')}`;
     const orderId = `SAT-MID-${Date.now()}`;
 
-    console.log(`Processing payment for ${email}, amount: ${amount}, order: ${orderId}`);
+    console.log(`[PAYMENT] Processing: ${email}, Amount: ${amount}, OrderID: ${orderId}`);
 
     const response = await fetch('https://app.sandbox.midtrans.com/snap/v1/transactions', {
       method: 'POST',
@@ -55,8 +59,12 @@ export default async function handler(req, res) {
     }
 
     return res.status(200).json(data);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Serverless Function Crash:", error.message);
-    return res.status(500).json({ error: "INTERNAL_SERVER_ERROR", details: error.message });
+    return res.status(500).json({ 
+      error: "INTERNAL_SERVER_ERROR", 
+      details: error.message,
+      suggestion: "Check if Server ID is correct for Sandbox environment."
+    });
   }
 }

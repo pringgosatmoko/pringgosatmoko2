@@ -157,7 +157,6 @@ const App: React.FC = () => {
     }
   }, [userEmail]);
 
-  // Logika Pemulihan Sesi Master
   useEffect(() => {
     const checkInitialSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -228,7 +227,6 @@ const App: React.FC = () => {
   };
   const t = translations[lang];
 
-  // Prevent flicker during session loading
   if (isLoggedIn === null && !showIntro) {
     return <div className="h-screen bg-[#020617] flex items-center justify-center"><i className="fa-solid fa-spinner fa-spin text-cyan-500 text-3xl"></i></div>;
   }
@@ -241,7 +239,7 @@ const App: React.FC = () => {
         {showIntro ? (
           <StartAnimation key="intro" onComplete={() => setShowIntro(false)} />
         ) : isLoggedIn === false ? (
-          <motion.div key="landing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-full w-full flex flex-col overflow-y-auto no-scrollbar scroll-smooth">
+          <motion.div key="landing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-full w-full flex flex-col overflow-y-auto no-scrollbar scroll-smooth bg-[#020617]">
             {/* STICKY NAV */}
             <nav className="fixed top-0 left-0 w-full z-[500] h-20 px-6 lg:px-16 flex items-center justify-between glass-panel border-b border-white/5 bg-[#020617]/90 backdrop-blur-3xl">
               <div className="flex items-center gap-4">
@@ -250,42 +248,47 @@ const App: React.FC = () => {
               </div>
               <div className="hidden lg:flex items-center gap-10">
                  <a href="#hero" className="text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-colors">Beranda</a>
-                 <a href="#portal" className="text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-colors">Login</a>
+                 <a href="#portal" className="text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-colors">Informasi</a>
               </div>
-              <button onClick={() => setAuthMode('register')} className="px-6 py-2.5 bg-white text-black text-[9px] font-bold uppercase rounded-xl shadow-xl hover:bg-cyan-500 hover:text-white transition-all">MULAI SEKARANG</button>
+              <button onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')} className="px-6 py-2.5 bg-white text-black text-[9px] font-bold uppercase rounded-xl shadow-xl hover:bg-cyan-500 hover:text-white transition-all">
+                {authMode === 'login' ? 'DAFTAR AKUN' : 'LOGIN SISTEM'}
+              </button>
             </nav>
 
-            {/* HERO & LOGIN SECTION (RE-ARRANGED) */}
-            <section id="hero" className="min-h-screen flex flex-col items-center justify-center px-6 py-28 bg-gradient-to-b from-[#020617] to-[#010409] relative overflow-hidden">
+            {/* HERO & LOGIN SECTION (MASTER REQUEST RE-ARRANGED) */}
+            <section id="hero" className="min-h-screen flex flex-col items-center justify-center px-6 py-28 relative overflow-hidden">
+               {/* Background Effects */}
+               <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-cyan-500/10 blur-[120px] rounded-full pointer-events-none"></div>
+               
                <div className="relative z-10 flex flex-col items-center w-full max-w-lg">
-                  {/* Animasi Robot Di Paling Atas */}
+                  {/* Animasi Robot Master di Paling Atas */}
                   <motion.div 
-                    initial={{ scale: 0.8, opacity: 0, y: 30 }}
-                    animate={{ scale: 1, opacity: 1, y: 0 }}
-                    transition={{ duration: 1.5, ease: "easeOut" }}
-                    className="scale-90 md:scale-100 mb-6"
+                    initial={{ scale: 0.8, opacity: 0, y: -20 }}
+                    animate={{ scale: 1.1, opacity: 1, y: 0 }}
+                    transition={{ duration: 1.2, ease: "easeOut" }}
+                    className="mb-8"
                   >
                     <RobotHero />
                   </motion.div>
                   
-                  {/* Logo dan Slogan Di Bawah Robot */}
-                  <div className="text-center space-y-4 mb-10">
+                  {/* Logo dan Slogan */}
+                  <div className="text-center space-y-4 mb-12">
                     <LogoHero isLoaded={true} />
                     <SloganAnimation />
                   </div>
                   
-                  {/* Login Form Di Bawah Slogan */}
+                  {/* Login Form di Bawah Slogan */}
                   <motion.div 
-                    initial={{ y: 30, opacity: 0 }}
+                    initial={{ y: 20, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
-                    transition={{ delay: 0.6, duration: 0.8 }}
+                    transition={{ delay: 0.5, duration: 0.8 }}
                     className="w-full"
                   >
                     <LoginForm onSuccess={handleLoginSuccess} lang={lang} forcedMode={authMode} />
                   </motion.div>
 
-                  <div className="mt-12 group flex flex-col items-center gap-4 opacity-30">
-                    <span className="text-[9px] font-bold uppercase text-slate-600 tracking-widest">GULIR UNTUK INFO STUDIO</span>
+                  <div className="mt-16 group flex flex-col items-center gap-4 opacity-30">
+                    <span className="text-[9px] font-bold uppercase text-slate-600 tracking-widest">SCROLL UNTUK INFO EKOSISTEM</span>
                     <div className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center animate-bounce text-cyan-400"><i className="fa-solid fa-chevron-down text-[10px]"></i></div>
                   </div>
                </div>
@@ -325,7 +328,6 @@ const App: React.FC = () => {
                   <SideIcon active={activeFeature === 'profile'} icon="fa-user-shield" onClick={() => setActiveFeature('profile')} label={t.profile} />
                 </nav>
                 <div className="mt-auto space-y-4">
-                  {/* Logout Paten di Sidebar Desktop */}
                   <button 
                     onClick={handleLogout}
                     className="w-full py-4 rounded-2xl border border-red-500/20 bg-red-500/5 text-red-500 hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-4 text-[9px] font-bold uppercase tracking-widest active:scale-95"
@@ -338,7 +340,6 @@ const App: React.FC = () => {
 
              {/* MAIN AREA */}
              <main className="flex-1 overflow-y-auto no-scrollbar relative flex flex-col">
-                {/* Header Global Tetap Ada Di Mana Saja */}
                 <header className="sticky top-0 z-[200] glass-panel border-b border-white/5 bg-[#020617]/90 px-4 lg:px-12 py-4 flex items-center justify-between shadow-2xl">
                    <div className="flex items-center gap-4 lg:hidden">
                       <div onClick={() => setActiveFeature('menu')} className="w-8 h-8 rounded-lg bg-cyan-500 flex items-center justify-center text-black font-bold text-xs cursor-pointer shadow-lg active:scale-90">S</div>
@@ -349,7 +350,6 @@ const App: React.FC = () => {
                    </div>
                    
                    <div className="flex items-center gap-3">
-                      {/* Logout Paten di Header Pojok Kanan untuk Member & Admin */}
                       <button 
                         onClick={handleLogout}
                         className="group flex items-center gap-3 bg-red-500/10 hover:bg-red-500 border border-red-500/20 hover:border-red-400 px-4 py-2 lg:px-6 lg:py-2.5 rounded-xl transition-all shadow-xl active:scale-95"
