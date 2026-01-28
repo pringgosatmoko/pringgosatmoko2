@@ -14,7 +14,6 @@ import { DirectChat } from './components/DirectChat';
 import { ProfileSettings } from './components/ProfileSettings';
 import { StartAnimation } from './components/StartAnimation';
 import { SloganAnimation } from './components/SloganAnimation';
-import { LandingHero } from './components/LandingHero';
 import { RobotHero } from './components/RobotHero';
 import { StorageManager } from './components/StorageManager';
 import { PriceManager } from './components/PriceManager';
@@ -131,7 +130,7 @@ const DashboardMenu = ({ onSelect, isAdmin, t, credits }: { onSelect: (f: Featur
 );
 
 const App: React.FC = () => {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null); // Null means loading
   const [showIntro, setShowIntro] = useState(true);
   const [userEmail, setUserEmail] = useState('');
   const [userCredits, setUserCredits] = useState(0);
@@ -159,15 +158,17 @@ const App: React.FC = () => {
   }, [userEmail]);
 
   useEffect(() => {
-    const checkSession = async () => {
+    const checkInitialSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user?.email) {
         setUserEmail(session.user.email);
         setIsLoggedIn(true);
         refreshUserData(session.user.email);
+      } else {
+        setIsLoggedIn(false);
       }
     };
-    checkSession();
+    checkInitialSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session?.user?.email) {
@@ -185,7 +186,7 @@ const App: React.FC = () => {
   }, [refreshUserData]);
 
   useEffect(() => {
-    if (isLoggedIn && userEmail) {
+    if (isLoggedIn === true && userEmail) {
       const normalizedEmail = userEmail.toLowerCase();
       updatePresence(normalizedEmail);
       refreshUserData();
@@ -225,6 +226,9 @@ const App: React.FC = () => {
   };
   const t = translations[lang];
 
+  // Prevent flicker during session loading
+  if (isLoggedIn === null && !showIntro) return <div className="h-screen bg-[#020617] flex items-center justify-center"><i className="fa-solid fa-spinner fa-spin text-cyan-500 text-3xl"></i></div>;
+
   return (
     <div className="h-screen w-full bg-[#020617] text-slate-100 font-sans selection:bg-cyan-500/30 overflow-hidden flex flex-col relative">
       <div className="scan-line"></div>
@@ -250,7 +254,6 @@ const App: React.FC = () => {
             {/* HERO & LOGIN SECTION */}
             <section id="hero" className="min-h-screen flex flex-col items-center justify-center px-6 py-28 bg-gradient-to-b from-[#020617] to-[#010409] relative overflow-hidden">
                <div className="relative z-10 flex flex-col items-center w-full max-w-lg">
-                  {/* Animasi RobotHero di Atas Sesuai Request */}
                   <motion.div 
                     initial={{ scale: 0.8, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
@@ -265,7 +268,6 @@ const App: React.FC = () => {
                     <SloganAnimation />
                   </div>
                   
-                  {/* Login Form Tepat di Bawah Animasi */}
                   <motion.div 
                     initial={{ y: 30, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
@@ -299,7 +301,7 @@ const App: React.FC = () => {
           </motion.div>
         ) : (
           <motion.div key="dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex h-screen overflow-hidden bg-[#020617] relative">
-             {/* SIDEBAR */}
+             {/* SIDEBAR (Desktop) */}
              <aside className="hidden lg:flex flex-col w-[280px] bg-[#0f172a]/95 border-r border-white/5 py-10 px-6 flex-shrink-0 z-50">
                 <div className="flex items-center gap-4 mb-16">
                   <div onClick={() => setActiveFeature('menu')} className="w-12 h-12 rounded-2xl bg-cyan-500 flex items-center justify-center text-black shadow-lg cursor-pointer transition-all active:scale-95 shadow-cyan-500/20"><i className="fa-solid fa-bolt-lightning text-xl"></i></div>
@@ -327,20 +329,29 @@ const App: React.FC = () => {
              </aside>
 
              {/* MAIN AREA */}
-             <main className="flex-1 overflow-y-auto no-scrollbar relative px-4 lg:px-12 py-6 lg:py-10 pb-48 lg:pb-10">
-                {activeFeature === 'menu' && (
-                  <div className="absolute top-6 right-6 lg:top-10 lg:right-12 z-[100] flex items-center gap-3">
-                     <button 
+             <main className="flex-1 overflow-y-auto no-scrollbar relative flex flex-col">
+                {/* Header Global yang Selalu Ada */}
+                <header className="sticky top-0 z-[200] glass-panel border-b border-white/5 bg-[#020617]/90 px-4 lg:px-12 py-4 flex items-center justify-between">
+                   <div className="flex items-center gap-4 lg:hidden">
+                      <div className="w-8 h-8 rounded-lg bg-cyan-500 flex items-center justify-center text-black font-bold text-xs">S</div>
+                      <span className="text-[10px] font-bold uppercase tracking-widest">DASHBOARD</span>
+                   </div>
+                   <div className="hidden lg:block">
+                      <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest">STATUS_LINK: SECURE</p>
+                   </div>
+                   
+                   <div className="flex items-center gap-3">
+                      <button 
                         onClick={handleLogout}
-                        className="group flex items-center gap-3 bg-red-500/10 hover:bg-red-500 border border-red-500/20 hover:border-red-400 px-4 py-2 lg:px-6 lg:py-3 rounded-xl lg:rounded-2xl transition-all shadow-xl active:scale-95"
-                     >
-                        <i className="fa-solid fa-power-off text-red-500 group-hover:text-white text-xs lg:text-base"></i>
-                        <span className="text-[8px] lg:text-[10px] font-black uppercase text-red-500 group-hover:text-white tracking-widest">{t.logout}</span>
-                     </button>
-                  </div>
-                )}
+                        className="group flex items-center gap-3 bg-red-500/10 hover:bg-red-500 border border-red-500/20 hover:border-red-400 px-4 py-2 lg:px-6 lg:py-2.5 rounded-xl transition-all shadow-xl active:scale-95"
+                      >
+                        <i className="fa-solid fa-power-off text-red-500 group-hover:text-white text-xs lg:text-sm"></i>
+                        <span className="text-[8px] lg:text-[9px] font-black uppercase text-red-500 group-hover:text-white tracking-widest">{t.logout}</span>
+                      </button>
+                   </div>
+                </header>
 
-                <div className="max-w-[1400px] mx-auto h-full">
+                <div className="max-w-[1400px] w-full mx-auto flex-1 px-4 lg:px-12 py-6 pb-48 lg:pb-10">
                   <AnimatePresence mode="wait">
                     <motion.div key={activeFeature} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }} className="h-full">
                       {(() => {

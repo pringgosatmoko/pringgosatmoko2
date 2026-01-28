@@ -11,6 +11,11 @@ const getEnv = (key: string) => {
   return win.process?.env?.[key] || metaEnv[key] || "";
 };
 
+// Inisialisasi awal API_KEY ke global process.env agar library Google bisa membacanya
+if (!win.process.env.API_KEY) {
+  win.process.env.API_KEY = getEnv('VITE_GEMINI_API_1');
+}
+
 // --- LAZY SUPABASE INITIALIZATION ---
 let supabaseInstance: SupabaseClient | null = null;
 
@@ -20,7 +25,6 @@ export const getSupabase = () => {
   const url = getEnv('VITE_DATABASE_URL');
   const key = getEnv('VITE_SUPABASE_ANON');
 
-  // Vercel check: Jika URL kosong saat runtime, gunakan dummy agar aplikasi tidak crash saat inisialisasi awal
   if (!url || !url.startsWith('http')) {
     console.warn("API Node: Database URL belum terdeteksi. Menggunakan mode standby.");
     return createClient("https://dummy-access.supabase.co", "dummy-key");
@@ -30,7 +34,6 @@ export const getSupabase = () => {
   return supabaseInstance;
 };
 
-// Proxy untuk mempermudah pemanggilan 'supabase.from()' di seluruh file lain
 export const supabase = new Proxy({} as SupabaseClient, {
   get: (target, prop: keyof SupabaseClient) => {
     const client = getSupabase();
@@ -175,9 +178,10 @@ export const rotateApiKey = () => {
   const nextKey = getEnv(`VITE_GEMINI_API_${currentSlot}`);
   if (nextKey) {
     win.process.env.API_KEY = nextKey;
+    console.log(`Node Rotated to Slot ${currentSlot}`);
     return nextKey;
   }
-  return getEnv('VITE_GEMINI_API_1');
+  return win.process.env.API_KEY;
 };
 
 export const getActiveApiKey = () => win.process?.env?.API_KEY || getEnv('VITE_GEMINI_API_1');

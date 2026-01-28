@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { motion, AnimatePresence } from 'framer-motion';
-import { deductCredits, getSystemSettings, rotateApiKey } from '../lib/api';
+import { deductCredits, getSystemSettings, rotateApiKey, getActiveApiKey } from '../lib/api';
 
 interface LogEntry {
   id: string;
@@ -90,6 +90,12 @@ export const AspectRatioEditor: React.FC<AspectRatioEditorProps> = ({ onBack, la
       return;
     }
 
+    const apiKey = getActiveApiKey();
+    if (!apiKey) {
+      addLog("Gagal: API Key tidak terdeteksi. Silakan cek Vercel Master.", "error");
+      return;
+    }
+
     setIsProcessing(true);
     addLog(retryCount > 0 ? `Coba ulang (Slot Kunci ${retryCount + 1})...` : "Melakukan Generative Outpainting...");
 
@@ -100,7 +106,7 @@ export const AspectRatioEditor: React.FC<AspectRatioEditorProps> = ({ onBack, la
         refreshCredits();
       }
 
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+      const ai = new GoogleGenAI({ apiKey });
 
       const imagePart = {
         inlineData: {
@@ -109,7 +115,6 @@ export const AspectRatioEditor: React.FC<AspectRatioEditorProps> = ({ onBack, la
         },
       };
 
-      // PROMPT YANG DIPERKUAT: Fokus pada perluasan bagian bawah agar tidak sempit
       const prompt = `Extend the background of this image to fit a ${aspectRatio} aspect ratio. 
       INSTRUCTIONS: 
       1. Use "Generative Fill" to outpaint new areas, ESPECIALLY focus on extending the BOTTOM of the frame significantly. 

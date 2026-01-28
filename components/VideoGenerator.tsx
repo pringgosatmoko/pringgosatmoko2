@@ -49,7 +49,6 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({ mode, onBack, la
   }, []);
 
   const checkApiKeyStatus = async () => {
-    // DETEKSI LINGKUNGAN: Jika di browser standar (hasil deploy), bypass check.
     if (!(window as any).aistudio) {
       setHasUserKey(true);
       return;
@@ -58,7 +57,6 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({ mode, onBack, la
       const hasKey = await (window as any).aistudio.hasSelectedApiKey();
       setHasUserKey(hasKey);
     } catch (e) {
-      // Jika terjadi error pada bridge, anggap saja true agar user tidak terjebak
       setHasUserKey(true);
     }
   };
@@ -146,6 +144,11 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({ mode, onBack, la
       return;
     }
 
+    if (!process.env.API_KEY) {
+      addLog("Gagal: API Key global tidak terdeteksi. Silakan cek Vercel Master.", "error");
+      return;
+    }
+
     setIsGenerating(true);
     if (retryCount === 0) setVideoUrl(null);
     addLog("Memulai pemrosesan video sinematik...");
@@ -161,8 +164,8 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({ mode, onBack, la
         refreshCredits();
       }
 
-      // Correct: Use process.env.API_KEY directly as per guidelines.
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+      // Initialize with process.env.API_KEY directly
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
       const isMultiImage = sourceImages.length > 1;
       const modelName = isMultiImage ? 'veo-3.1-generate-preview' : 'veo-3.1-fast-generate-preview';
@@ -202,7 +205,7 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({ mode, onBack, la
 
       const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
       if (downloadLink) {
-        // Correct: Append process.env.API_KEY for fetching the video bytes.
+        // Appending the global key for download
         const response = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
         const blob = await response.blob();
         setVideoUrl(URL.createObjectURL(blob as Blob));
@@ -210,12 +213,10 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({ mode, onBack, la
       }
     } catch (e: any) { 
       const errorMsg = e?.message || JSON.stringify(e);
-      if (errorMsg.includes('Requested entity was not found') || errorMsg.includes('429')) {
+      if ((errorMsg.includes('Requested entity was not found') || errorMsg.includes('429') || errorMsg.includes('quota')) && retryCount < 2) {
         addLog("Jalur padat, mencoba rotasi kunci...", "warning");
         rotateApiKey();
-        if (retryCount < 2) {
-          return generateVideo(retryCount + 1);
-        }
+        setTimeout(() => generateVideo(retryCount + 1), 1500);
       } else {
         addLog(`Gagal: ${errorMsg.substring(0, 80)}`, "error");
       }

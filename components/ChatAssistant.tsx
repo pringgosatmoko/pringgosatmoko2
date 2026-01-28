@@ -30,6 +30,12 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ onBack }) => {
     if (!userMsg && retryCount === 0) return;
     if (isTyping && retryCount === 0) return;
     
+    // Gunakan process.env.API_KEY secara langsung sesuai pedoman
+    if (!process.env.API_KEY) {
+       setMessages(prev => [...prev, { role: 'assistant', text: "Waduh Bro, API Key Master belum terdeteksi secara global. Cek Vercel Master." }]);
+       return;
+    }
+
     if (retryCount === 0) {
       setInput('');
       setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
@@ -38,8 +44,8 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ onBack }) => {
     setIsTyping(true);
 
     try {
-      // Correct: Use process.env.API_KEY directly as per guidelines.
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+      // Correct initialization according to rule: Must use new GoogleGenAI({ apiKey: process.env.API_KEY })
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
       const systemInstruction = `Anda adalah "SATMOKO AI CORE" - Intelijen Utama Satmoko Studio Creative.
 
@@ -73,11 +79,16 @@ GAYA KOMUNIKASI:
       const reply = response.text || "Sorry Bro, koneksi lagi agak lag. Bisa ulangi pertanyaannya?";
       setMessages(prev => [...prev, { role: 'assistant', text: reply }]);
     } catch (e: any) {
-      if (e.message?.includes('429') && retryCount < 2) {
+      console.error("Chat Error:", e);
+      const errorMsg = e.message || "";
+      if ((errorMsg.includes('429') || errorMsg.includes('quota')) && retryCount < 2) {
         rotateApiKey(); 
-        handleSend(retryCount + 1); 
+        setTimeout(() => handleSend(retryCount + 1), 1000); 
       } else {
-        setMessages(prev => [...prev, { role: 'assistant', text: `Jalur transmisi lagi padat nih Bro. Gue coba alihkan ke node cadangan ya...` }]);
+        const errorText = errorMsg.includes('API key not found') 
+          ? "API Key Master hilang di tengah jalan. Cek pengaturan Vercel Master."
+          : "Jalur transmisi lagi padat nih Bro. Gue coba alihkan ke node cadangan ya...";
+        setMessages(prev => [...prev, { role: 'assistant', text: errorText }]);
       }
     } finally {
       setIsTyping(false);
