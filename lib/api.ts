@@ -37,7 +37,6 @@ export const supabase = new Proxy({} as SupabaseClient, {
 // --- MIDTRANS INTEGRATION (FINAL STABLE) ---
 export const initMidtransPayment = async (email: string, amount: number, plan: string) => {
   try {
-    // Gunakan relative path sederhana, Vercel otomatis mengarahkan ke fungsi lokal
     const response = await fetch('/api/pay', {
       method: 'POST',
       headers: { 
@@ -47,12 +46,14 @@ export const initMidtransPayment = async (email: string, amount: number, plan: s
       body: JSON.stringify({ email, amount, plan })
     });
 
+    const data = await response.json().catch(() => ({}));
+
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `HTTP ${response.status}`);
+      // Ambil detail error jika ada dari backend
+      const errorMessage = data.details || data.error || `HTTP ${response.status}`;
+      throw new Error(errorMessage);
     }
 
-    const data = await response.json();
     const orderId = `SAT-MID-${Date.now()}`;
     
     // Simpan log ke Supabase
@@ -66,12 +67,12 @@ export const initMidtransPayment = async (email: string, amount: number, plan: s
 
     return { success: true, snapToken: data.token, orderId };
   } catch (err: any) {
-    console.error("Fetch Failure:", err);
-    // Pesan khusus untuk Master agar tahu ini masalah koneksi browser
+    console.error("Payment Error:", err.message);
+    let userMsg = err.message;
     if (err.message === 'Failed to fetch') {
-      return { success: false, error: "Gagal Terhubung ke Server. Pastikan Internet Stabil & Mode Hemat Data Mati." };
+      userMsg = "Koneksi Terputus / Server Sedang Sibuk. Coba lagi dalam 5 detik.";
     }
-    return { success: false, error: err.message };
+    return { success: false, error: userMsg };
   }
 };
 

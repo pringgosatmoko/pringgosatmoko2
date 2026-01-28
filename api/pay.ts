@@ -1,9 +1,6 @@
-
-// Vercel Serverless Function - Master Stable Bridge (Node.js Runtime)
-import { Buffer } from 'buffer';
-
+// Vercel Serverless Function - Master High-Stability Bridge (Node.js Runtime)
 export default async function handler(req, res) {
-  // Tambahkan Header CORS secara manual untuk keamanan ekstra
+  // Tambahkan Header CORS secara manual agar tidak diblokir browser
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -23,16 +20,21 @@ export default async function handler(req, res) {
 
   try {
     const { email, amount, plan } = req.body;
-    const serverId = process.env.VITE_MIDTRANS_SERVER_ID;
     
-    if (!serverId) {
-      console.error("CRITICAL: VITE_MIDTRANS_SERVER_ID is missing in Vercel Env.");
-      return res.status(500).json({ error: 'SERVER_ID_MISSING' });
+    // Deteksi Kunci: Cek VITE_MIDTRANS_SERVER_ID atau MIDTRANS_SERVER_ID
+    // Vercel Backend bisa membaca keduanya, tergantung apa yang Master input di Dashboard
+    const serverKey = process.env.VITE_MIDTRANS_SERVER_ID || process.env.MIDTRANS_SERVER_ID;
+    
+    if (!serverKey) {
+      console.error("[CRITICAL] Server Key tidak ditemukan di Vercel Env!");
+      return res.status(500).json({ 
+        error: 'SERVER_KEY_MISSING',
+        details: 'Master belum memasukkan VITE_MIDTRANS_SERVER_ID di Environment Variables Vercel.'
+      });
     }
 
-    // Gunakan Buffer: Cara paling aman di Node.js untuk menghindari crash
-    // @fix: Explicitly import Buffer from 'buffer' and use it to encode credentials
-    const authHeader = `Basic ${Buffer.from(serverId + ":").toString('base64')}`;
+    // Fix: Access Buffer via globalThis and cast to any to resolve TypeScript 'Cannot find name Buffer' error in Node.js environment
+    const authHeader = `Basic ${(globalThis as any).Buffer.from(serverKey + ":").toString('base64')}`;
     const orderId = `SAT-MID-${Date.now()}`;
 
     console.log(`[PAYMENT] Processing: ${email}, Amount: ${amount}, OrderID: ${orderId}`);
@@ -55,7 +57,10 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       console.error("Midtrans API Error:", data);
-      return res.status(response.status).json(data);
+      return res.status(response.status).json({ 
+        error: 'MIDTRANS_REJECTED', 
+        details: data.error_messages ? data.error_messages[0] : 'Cek Log Midtrans' 
+      });
     }
 
     return res.status(200).json(data);
@@ -64,7 +69,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ 
       error: "INTERNAL_SERVER_ERROR", 
       details: error.message,
-      suggestion: "Check if Server ID is correct for Sandbox environment."
+      suggestion: "Pastikan Server Key di Vercel sudah benar untuk mode Sandbox."
     });
   }
 }
