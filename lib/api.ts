@@ -34,29 +34,31 @@ export const supabase = new Proxy({} as SupabaseClient, {
   }
 });
 
-// --- MIDTRANS INTEGRATION (FINAL STABLE) ---
+// --- MIDTRANS INTEGRATION (ULTRA STABLE) ---
 export const initMidtransPayment = async (email: string, amount: number, plan: string) => {
   try {
+    console.log("Satmoko Hub: Menghubungi Gateway Pembayaran...");
+    
     const response = await fetch('/api/pay', {
       method: 'POST',
       headers: { 
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({ email, amount, plan })
     });
 
-    const data = await response.json().catch(() => ({}));
+    const data = await response.json();
 
     if (!response.ok) {
-      // Ambil detail error jika ada dari backend
-      const errorMessage = data.details || data.error || `HTTP ${response.status}`;
-      throw new Error(errorMessage);
+      // Menangkap detail error dari backend Master
+      const errorMsg = data.details || data.error || `Error ${response.status}`;
+      throw new Error(errorMsg);
     }
 
+    // Jika sampai sini, berarti token didapat
     const orderId = `SAT-MID-${Date.now()}`;
     
-    // Simpan log ke Supabase
+    // Log ke Supabase (status pending)
     await supabase.from('topup_requests').insert([{
       tid: orderId,
       email: email.toLowerCase(),
@@ -67,11 +69,13 @@ export const initMidtransPayment = async (email: string, amount: number, plan: s
 
     return { success: true, snapToken: data.token, orderId };
   } catch (err: any) {
-    console.error("Payment Error:", err.message);
+    console.error("Critical Payment Error:", err.message);
     let userMsg = err.message;
+    
     if (err.message === 'Failed to fetch') {
-      userMsg = "Koneksi Terputus / Server Sedang Sibuk. Coba lagi dalam 5 detik.";
+      userMsg = "Koneksi ke API Master Terputus. Pastikan Vercel Function tidak Crash.";
     }
+    
     return { success: false, error: userMsg };
   }
 };

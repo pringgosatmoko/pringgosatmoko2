@@ -1,13 +1,19 @@
+
 // Vercel Serverless Function - Master High-Stability Bridge (Node.js Runtime)
 export default async function handler(req, res) {
-  // Tambahkan Header CORS secara manual agar tidak diblokir browser
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader(
-    'Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-  );
+  // Fungsi pembantu untuk set headers secara konsisten
+  const setCorsHeaders = (response) => {
+    response.setHeader('Access-Control-Allow-Credentials', 'true');
+    response.setHeader('Access-Control-Allow-Origin', '*');
+    response.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+    response.setHeader(
+      'Access-Control-Allow-Headers',
+      'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
+    );
+  };
+
+  // Selalu set headers di awal
+  setCorsHeaders(res);
 
   if (req.method === 'OPTIONS') {
     res.status(200).end();
@@ -21,25 +27,25 @@ export default async function handler(req, res) {
   try {
     const { email, amount, plan } = req.body;
     
-    // Deteksi Kunci: Cek VITE_MIDTRANS_SERVER_ID atau MIDTRANS_SERVER_ID
-    // Vercel Backend bisa membaca keduanya, tergantung apa yang Master input di Dashboard
+    // Deteksi Kunci Master
     const serverKey = process.env.VITE_MIDTRANS_SERVER_ID || process.env.MIDTRANS_SERVER_ID;
     
     if (!serverKey) {
-      console.error("[CRITICAL] Server Key tidak ditemukan di Vercel Env!");
+      console.error("[CRITICAL] Server Key tidak ditemukan!");
       return res.status(500).json({ 
         error: 'SERVER_KEY_MISSING',
-        details: 'Master belum memasukkan VITE_MIDTRANS_SERVER_ID di Environment Variables Vercel.'
+        details: 'Variabel lingkungan VITE_MIDTRANS_SERVER_ID belum diatur di Vercel Dashboard.'
       });
     }
 
-    // Fix: Access Buffer via globalThis and cast to any to resolve TypeScript 'Cannot find name Buffer' error in Node.js environment
-    const authHeader = `Basic ${(globalThis as any).Buffer.from(serverKey + ":").toString('base64')}`;
+    // Encoding paling aman untuk Node.js
+    // Fix: Using (Buffer as any) to resolve TypeScript error when node types are not available
+    const authHeader = `Basic ${(Buffer as any).from(serverKey + ":").toString('base64')}`;
     const orderId = `SAT-MID-${Date.now()}`;
 
-    console.log(`[PAYMENT] Processing: ${email}, Amount: ${amount}, OrderID: ${orderId}`);
+    console.log(`[PAYMENT_INIT] ${email} - Order: ${orderId}`);
 
-    const response = await fetch('https://app.sandbox.midtrans.com/snap/v1/transactions', {
+    const midtransResponse = await fetch('https://app.sandbox.midtrans.com/snap/v1/transactions', {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
@@ -53,23 +59,26 @@ export default async function handler(req, res) {
       })
     });
 
-    const data = await response.json();
+    const data = await midtransResponse.json();
 
-    if (!response.ok) {
-      console.error("Midtrans API Error:", data);
-      return res.status(response.status).json({ 
-        error: 'MIDTRANS_REJECTED', 
-        details: data.error_messages ? data.error_messages[0] : 'Cek Log Midtrans' 
+    if (!midtransResponse.ok) {
+      console.error("[MIDTRANS_ERROR]", data);
+      return res.status(midtransResponse.status).json({ 
+        error: 'MIDTRANS_API_ERROR', 
+        details: data.error_messages ? data.error_messages[0] : 'Gagal memproses ke Midtrans' 
       });
     }
 
+    // Sukses
     return res.status(200).json(data);
   } catch (error: any) {
-    console.error("Serverless Function Crash:", error.message);
+    console.error("[SERVERLESS_CRASH]", error.message);
+    // PASTIKAN headers tetap ada meskipun error
+    setCorsHeaders(res);
     return res.status(500).json({ 
       error: "INTERNAL_SERVER_ERROR", 
       details: error.message,
-      suggestion: "Pastikan Server Key di Vercel sudah benar untuk mode Sandbox."
+      suggestion: "Cek Log Vercel Master untuk detail lebih lanjut."
     });
   }
 }
