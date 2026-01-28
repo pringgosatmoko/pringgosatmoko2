@@ -34,28 +34,25 @@ export const supabase = new Proxy({} as SupabaseClient, {
   }
 });
 
-// --- MIDTRANS INTEGRATION (AUTOMATED VIA PROXY) ---
+// --- MIDTRANS INTEGRATION (ULTIMATE AUTOMATION) ---
 export const initMidtransPayment = async (email: string, amount: number, plan: string) => {
-  const serverId = getEnv('VITE_MIDTRANS_SERVER_ID'); 
-  if (!serverId) return { success: false, error: "VITE_MIDTRANS_SERVER_ID_BELUM_DI_SET" };
-
   try {
-    // Panggil Serverless Function internal (api/pay.ts)
+    // Panggil Bridge API internal (tanpa mengirim serverId dari client demi keamanan)
     const response = await fetch('/api/pay', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, amount, plan, serverId })
+      body: JSON.stringify({ email, amount, plan })
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Server Error');
-    }
-
     const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Gateway Bridge Failure');
+    }
     
-    // Simpan ke database Supabase agar tetap tersistem
     const orderId = `SAT-MID-${Date.now()}`;
+    
+    // Log transaksi ke database
     await supabase.from('topup_requests').insert([{
       tid: orderId,
       email: email.toLowerCase(),
@@ -66,7 +63,7 @@ export const initMidtransPayment = async (email: string, amount: number, plan: s
 
     return { success: true, snapToken: data.token, orderId };
   } catch (err: any) {
-    console.error("Gateway Failure:", err);
+    console.error("Critical Gateway Error:", err);
     return { success: false, error: err.message };
   }
 };
