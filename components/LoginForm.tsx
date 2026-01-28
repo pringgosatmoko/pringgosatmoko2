@@ -93,11 +93,9 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, lang, forcedMod
       if (isRegister) {
         const planData = plans.find(p => p.label === selectedPlan)!;
 
-        // 1. Initiate Midtrans Transaction Dulu
         const midtransRes = await initMidtransPayment(email, planData.price, selectedPlan);
         
         if (midtransRes.success && midtransRes.snapToken) {
-          // 2. Jika sukses ambil token, baru buat user auth & member
           const { error: authError } = await supabase.auth.signUp({
             email,
             password,
@@ -112,11 +110,13 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, lang, forcedMod
             credits: planData.credits 
           }]);
 
-          setActiveOrderId(midtransRes.orderId);
-          setIsWaitingPayment(true);
-          sendTelegramNotification(`🆕 *PENDING REGISTER*\nNama: ${fullName}\nEmail: ${email}\nPaket: ${selectedPlan}\nID: ${midtransRes.orderId}`);
+          // SOLUSI ERROR TS2345: Gunakan fallback string kosong '' jika orderId undefined
+          const orderId = midtransRes.orderId || "";
+          setActiveOrderId(orderId);
           
-          // Trigger Snap Popup
+          setIsWaitingPayment(true);
+          sendTelegramNotification(`🆕 *PENDING REGISTER*\nNama: ${fullName}\nEmail: ${email}\nPaket: ${selectedPlan}\nID: ${orderId}`);
+          
           triggerMidtrans(midtransRes.snapToken);
         } else {
           throw new Error(midtransRes.error || "Gagal menghubungi server Midtrans.");
