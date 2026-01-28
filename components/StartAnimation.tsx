@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LandingHero } from './LandingHero';
+import { RobotHero } from './RobotHero';
 
 interface StartAnimationProps {
   onComplete: () => void;
@@ -37,7 +37,7 @@ export const StartAnimation: React.FC<StartAnimationProps> = ({ onComplete }) =>
         }
         return prev + 1;
       });
-    }, 30);
+    }, 25);
 
     return () => {
       clearInterval(interval);
@@ -47,22 +47,23 @@ export const StartAnimation: React.FC<StartAnimationProps> = ({ onComplete }) =>
 
   return (
     <div className="fixed inset-0 bg-[#010409] z-[999] flex flex-col items-center justify-center overflow-hidden">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(34,211,238,0.05)_0%,transparent_70%)]"></div>
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(34,211,238,0.08)_0%,transparent_70%)]"></div>
       
       <motion.div 
         initial={{ scale: 0.8, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 1.2, opacity: 0, filter: "blur(40px)" }}
+        exit={{ scale: 1.3, opacity: 0, filter: "blur(50px)" }}
+        transition={{ duration: 0.8 }}
         className="relative flex flex-col items-center"
       >
-        {/* Menggunakan Logo Hero sebagai Animasi Utama */}
-        <div className="scale-75 md:scale-100 mb-8">
-          <LandingHero />
+        {/* Menggunakan RobotHero sebagai Animasi Booting Utama */}
+        <div className="scale-90 md:scale-110 mb-12">
+          <RobotHero />
         </div>
 
         {/* Progress Display */}
         <div className="w-64 text-center">
-          <div className="flex justify-between items-end mb-3">
+          <div className="flex justify-between items-end mb-3 px-1">
              <motion.p 
                key={statusText}
                initial={{ opacity: 0, y: 5 }}
@@ -73,19 +74,18 @@ export const StartAnimation: React.FC<StartAnimationProps> = ({ onComplete }) =>
              </motion.p>
              <p className="text-[10px] font-black text-slate-500 font-mono">{progress}%</p>
           </div>
-          <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden border border-white/5 shadow-inner">
+          <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden border border-white/5 shadow-inner">
             <motion.div 
               initial={{ width: 0 }}
               animate={{ width: `${progress}%` }}
-              className="h-full bg-cyan-500 shadow-[0_0_15px_rgba(34,211,238,0.8)]"
+              className="h-full bg-cyan-500 shadow-[0_0_20px_rgba(34,211,238,1)]"
             />
           </div>
         </div>
       </motion.div>
       
-      <div className="absolute bottom-10 left-10 opacity-10 font-mono text-[8px] text-cyan-400 space-y-1">
-        <p>SYSTEM_LOAD: STABLE</p>
-        <p>ENCRYPTION: AES-256</p>
+      <div className="absolute bottom-10 left-1/2 -translate-x-1/2 opacity-20 font-mono text-[7px] text-cyan-400 tracking-[0.8em] uppercase">
+        Satmoko_Neural_Interface_v7.8_Active
       </div>
     </div>
   );

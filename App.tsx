@@ -130,7 +130,7 @@ const DashboardMenu = ({ onSelect, isAdmin, t, credits }: { onSelect: (f: Featur
 );
 
 const App: React.FC = () => {
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null); // Null means loading
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
   const [showIntro, setShowIntro] = useState(true);
   const [userEmail, setUserEmail] = useState('');
   const [userCredits, setUserCredits] = useState(0);
@@ -193,7 +193,7 @@ const App: React.FC = () => {
       const heartbeat = setInterval(() => { 
         updatePresence(normalizedEmail); 
         refreshUserData(); 
-      }, 15000);
+      }, 20000);
       return () => clearInterval(heartbeat);
     }
   }, [isLoggedIn, userEmail, refreshUserData]);
@@ -227,7 +227,9 @@ const App: React.FC = () => {
   const t = translations[lang];
 
   // Prevent flicker during session loading
-  if (isLoggedIn === null && !showIntro) return <div className="h-screen bg-[#020617] flex items-center justify-center"><i className="fa-solid fa-spinner fa-spin text-cyan-500 text-3xl"></i></div>;
+  if (isLoggedIn === null && !showIntro) {
+    return <div className="h-screen bg-[#020617] flex items-center justify-center"><i className="fa-solid fa-spinner fa-spin text-cyan-500 text-3xl"></i></div>;
+  }
 
   return (
     <div className="h-screen w-full bg-[#020617] text-slate-100 font-sans selection:bg-cyan-500/30 overflow-hidden flex flex-col relative">
@@ -236,7 +238,7 @@ const App: React.FC = () => {
       <AnimatePresence mode="wait">
         {showIntro ? (
           <StartAnimation key="intro" onComplete={() => setShowIntro(false)} />
-        ) : !isLoggedIn ? (
+        ) : isLoggedIn === false ? (
           <motion.div key="landing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-full w-full flex flex-col overflow-y-auto no-scrollbar scroll-smooth">
             {/* STICKY NAV */}
             <nav className="fixed top-0 left-0 w-full z-[500] h-20 px-6 lg:px-16 flex items-center justify-between glass-panel border-b border-white/5 bg-[#020617]/90 backdrop-blur-3xl">
@@ -251,23 +253,26 @@ const App: React.FC = () => {
               <button onClick={() => setAuthMode('register')} className="px-6 py-2.5 bg-white text-black text-[9px] font-bold uppercase rounded-xl shadow-xl hover:bg-cyan-500 hover:text-white transition-all">MULAI SEKARANG</button>
             </nav>
 
-            {/* HERO & LOGIN SECTION */}
+            {/* HERO & LOGIN SECTION (RE-ARRANGED) */}
             <section id="hero" className="min-h-screen flex flex-col items-center justify-center px-6 py-28 bg-gradient-to-b from-[#020617] to-[#010409] relative overflow-hidden">
                <div className="relative z-10 flex flex-col items-center w-full max-w-lg">
+                  {/* Animasi Robot Di Paling Atas */}
                   <motion.div 
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ duration: 1.2 }}
-                    className="scale-75 md:scale-100 mb-2"
+                    initial={{ scale: 0.8, opacity: 0, y: 30 }}
+                    animate={{ scale: 1, opacity: 1, y: 0 }}
+                    transition={{ duration: 1.5, ease: "easeOut" }}
+                    className="scale-90 md:scale-100 mb-6"
                   >
                     <RobotHero />
                   </motion.div>
                   
+                  {/* Logo dan Slogan Di Bawah Robot */}
                   <div className="text-center space-y-4 mb-10">
                     <LogoHero isLoaded={true} />
                     <SloganAnimation />
                   </div>
                   
+                  {/* Login Form Di Bawah Slogan */}
                   <motion.div 
                     initial={{ y: 30, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
@@ -318,6 +323,7 @@ const App: React.FC = () => {
                   <SideIcon active={activeFeature === 'profile'} icon="fa-user-shield" onClick={() => setActiveFeature('profile')} label={t.profile} />
                 </nav>
                 <div className="mt-auto space-y-4">
+                  {/* Logout Paten di Sidebar */}
                   <button 
                     onClick={handleLogout}
                     className="w-full py-4 rounded-2xl border border-red-500/20 bg-red-500/5 text-red-500 hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-4 text-[9px] font-bold uppercase tracking-widest active:scale-95"
@@ -330,17 +336,18 @@ const App: React.FC = () => {
 
              {/* MAIN AREA */}
              <main className="flex-1 overflow-y-auto no-scrollbar relative flex flex-col">
-                {/* Header Global yang Selalu Ada */}
-                <header className="sticky top-0 z-[200] glass-panel border-b border-white/5 bg-[#020617]/90 px-4 lg:px-12 py-4 flex items-center justify-between">
+                {/* Header Global yang Selalu Ada di Setiap Fitur */}
+                <header className="sticky top-0 z-[200] glass-panel border-b border-white/5 bg-[#020617]/90 px-4 lg:px-12 py-4 flex items-center justify-between shadow-lg">
                    <div className="flex items-center gap-4 lg:hidden">
-                      <div className="w-8 h-8 rounded-lg bg-cyan-500 flex items-center justify-center text-black font-bold text-xs">S</div>
+                      <div onClick={() => setActiveFeature('menu')} className="w-8 h-8 rounded-lg bg-cyan-500 flex items-center justify-center text-black font-bold text-xs cursor-pointer shadow-lg active:scale-90">S</div>
                       <span className="text-[10px] font-bold uppercase tracking-widest">DASHBOARD</span>
                    </div>
                    <div className="hidden lg:block">
-                      <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest">STATUS_LINK: SECURE</p>
+                      <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest">SATMOKO_HUB :: SECURE_CHANNEL_v7.8</p>
                    </div>
                    
                    <div className="flex items-center gap-3">
+                      {/* Logout Paten di Header Pojok Kanan */}
                       <button 
                         onClick={handleLogout}
                         className="group flex items-center gap-3 bg-red-500/10 hover:bg-red-500 border border-red-500/20 hover:border-red-400 px-4 py-2 lg:px-6 lg:py-2.5 rounded-xl transition-all shadow-xl active:scale-95"
@@ -381,7 +388,7 @@ const App: React.FC = () => {
              </main>
 
              {/* BOTTOM NAV MOBILE */}
-             <div className="lg:hidden fixed bottom-0 left-0 w-full z-[400] bg-[#020617]/95 border-t border-white/5 px-4 py-3 flex items-center justify-between shadow-2xl backdrop-blur-3xl">
+             <div className="lg:hidden fixed bottom-0 left-0 w-full z-[400] bg-[#020617]/95 border-t border-white/5 px-4 py-3 flex items-center justify-between shadow-[0_-10px_30px_rgba(0,0,0,0.5)] backdrop-blur-3xl">
                 <SideIcon active={activeFeature === 'menu'} icon="fa-house" onClick={() => setActiveFeature('menu')} label={t.home} />
                 <SideIcon active={activeFeature === 'chat'} icon="fa-comment-dots" onClick={() => setActiveFeature('chat')} label={t.aiAssistant} />
                 <SideIcon active={activeFeature === 'txt2img'} icon="fa-image" onClick={() => setActiveFeature('txt2img')} label={t.visualArt} />
