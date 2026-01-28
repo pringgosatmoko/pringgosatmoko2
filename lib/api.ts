@@ -34,25 +34,29 @@ export const supabase = new Proxy({} as SupabaseClient, {
   }
 });
 
-// --- MIDTRANS INTEGRATION (ULTIMATE AUTOMATION) ---
+// --- MIDTRANS INTEGRATION (ULTRA STABLE) ---
 export const initMidtransPayment = async (email: string, amount: number, plan: string) => {
   try {
-    // Panggil Bridge API internal (tanpa mengirim serverId dari client demi keamanan)
-    const response = await fetch('/api/pay', {
+    // Gunakan URL absolut untuk menghindari masalah routing di beberapa browser mobile
+    const apiUrl = `${window.location.origin}/api/pay`;
+    
+    const response = await fetch(apiUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
       body: JSON.stringify({ email, amount, plan })
     });
 
-    const data = await response.json();
-
     if (!response.ok) {
-      throw new Error(data.error || 'Gateway Bridge Failure');
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Server Error ${response.status}`);
     }
-    
+
+    const data = await response.json();
     const orderId = `SAT-MID-${Date.now()}`;
     
-    // Log transaksi ke database
     await supabase.from('topup_requests').insert([{
       tid: orderId,
       email: email.toLowerCase(),
@@ -64,6 +68,10 @@ export const initMidtransPayment = async (email: string, amount: number, plan: s
     return { success: true, snapToken: data.token, orderId };
   } catch (err: any) {
     console.error("Critical Gateway Error:", err);
+    // Deteksi error koneksi
+    if (err.message.includes('fetch')) {
+      return { success: false, error: "Koneksi ke server pembayaran terhalang (Cek Pop-up Browser)" };
+    }
     return { success: false, error: err.message };
   }
 };

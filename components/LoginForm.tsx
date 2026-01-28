@@ -94,7 +94,10 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, lang, forcedMod
                 window.location.reload(); 
               },
               onPending: () => { setIsWaitingPayment(true); },
-              onError: (result: any) => { setError("Pembayaran Gagal. Silakan coba lagi."); }
+              onError: (result: any) => { 
+                setError("Pembayaran Gagal. Pastikan Browser Mengizinkan Pop-up."); 
+                setIsWaitingPayment(false);
+              }
             });
           }
         } else {
@@ -131,6 +134,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, lang, forcedMod
          <div className="space-y-3">
             <h2 className="text-xl font-bold uppercase text-white italic">{t.paymentPending}</h2>
             <p className="text-[10px] font-medium text-slate-500 uppercase px-4 leading-relaxed">{t.paymentDesc}</p>
+            <p className="text-[9px] text-yellow-500 font-bold uppercase animate-bounce">IZINKAN POP-UP DI BROWSER MASTER!</p>
          </div>
          <button onClick={() => window.location.reload()} className="w-full py-5 bg-white text-black font-bold uppercase text-[10px] rounded-2xl shadow-xl hover:bg-cyan-400 transition-all">
             REFRESH STATUS
