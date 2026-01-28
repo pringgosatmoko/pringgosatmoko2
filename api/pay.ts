@@ -1,6 +1,7 @@
+
 // Vercel Serverless Function - Master High-Stability Bridge (Node.js Runtime)
 export default async function handler(req, res) {
-  // CORS Headers - Set immediately to prevent browser "Failed to fetch" on errors
+  // CORS Headers - WAJIB di paling atas agar browser tidak blokir respon error
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -17,30 +18,33 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Fix: Manual Base64 encoding function to avoid missing Buffer error in some TS environments
+  const encodeBase64 = (str: string) => {
+    try {
+      if (typeof btoa !== 'undefined') return btoa(str);
+      // Fallback to Buffer if available in Node
+      // @ts-ignore
+      if (typeof Buffer !== 'undefined') return Buffer.from(str).toString('base64');
+      return "";
+    } catch (e) {
+      return "";
+    }
+  };
+
   try {
     const { email, amount, plan } = req.body;
-    
-    // Deteksi Kunci Master - Mendukung prefix VITE_ maupun tidak
     const serverKey = process.env.VITE_MIDTRANS_SERVER_ID || process.env.MIDTRANS_SERVER_ID;
     
     if (!serverKey) {
-      console.error("[MIDTRANS] Server Key missing!");
-      return res.status(500).json({ 
-        error: 'SERVER_KEY_NOT_FOUND',
-        details: 'Pastikan VITE_MIDTRANS_SERVER_ID diatur di Vercel Dashboard.'
-      });
+      return res.status(500).json({ error: 'SERVER_KEY_NOT_FOUND' });
     }
 
-    // Auth Header using btoa (Standard in Node.js 16+ and Browsers)
-    // Fix: Using btoa instead of Buffer to resolve TypeScript error in serverless environments
-    const authHeader = `Basic ${btoa(serverKey + ":")}`;
+    // Fix: Using manual encodeBase64 instead of Buffer directly to resolve "Cannot find name 'Buffer'"
+    const authHeader = `Basic ${encodeBase64(serverKey + ":")}`;
     const orderId = `SAT-MID-${Date.now()}`;
 
-    console.log(`[PAYMENT_START] Order: ${orderId} for ${email}`);
-
-    // Fetch Midtrans with AbortController to handle potential hang/timeout
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000); // 8 seconds limit
+    const timeout = setTimeout(() => controller.abort(), 9000); // Batas 9 detik
 
     const response = await fetch('https://app.sandbox.midtrans.com/snap/v1/transactions', {
       method: 'POST',
@@ -61,24 +65,17 @@ export default async function handler(req, res) {
     const data = await response.json();
 
     if (!response.ok) {
-      console.error("[MIDTRANS_REJECTED]", data);
-      return res.status(response.status).json({ 
-        error: 'GATEWAY_ERROR', 
-        details: data.error_messages ? data.error_messages[0] : 'Midtrans rejected the request' 
-      });
+      return res.status(response.status).json({ error: 'MIDTRANS_ERROR', details: data });
     }
 
-    console.log(`[PAYMENT_SUCCESS] Token issued for ${orderId}`);
     return res.status(200).json(data);
 
   } catch (error: any) {
-    console.error("[SERVER_ERROR]", error.name === 'AbortError' ? 'Request Timeout' : error.message);
-    
-    const isTimeout = error.name === 'AbortError';
+    console.error("[PAY_API_CRASH]", error.message);
     return res.status(500).json({ 
-      error: isTimeout ? 'GATEWAY_TIMEOUT' : 'INTERNAL_SERVER_ERROR', 
-      details: isTimeout ? 'Midtrans Sandbox merespon terlalu lama.' : error.message,
-      suggestion: "Cek koneksi internet atau status Midtrans Sandbox."
+      error: 'SERVER_CRASH', 
+      details: error.message,
+      suggestion: "Cek apakah Server Key Midtrans sudah benar di Env Vercel."
     });
   }
 }
