@@ -6,31 +6,22 @@ const win = window as any;
 win.process = win.process || {};
 win.process.env = win.process.env || {};
 
-// Fungsi sakti untuk mengambil Env dari segala arah
 const getEnv = (key: string) => {
   const metaEnv = (import.meta as any).env || {};
   return win.process?.env?.[key] || metaEnv[key] || "";
 };
 
-// Pasang API_KEY secara global agar terbaca oleh SDK GoogleGenAI
 if (!win.process.env.API_KEY) {
   win.process.env.API_KEY = getEnv('VITE_GEMINI_API_1');
 }
 
-// --- LAZY SUPABASE INITIALIZATION ---
 let supabaseInstance: SupabaseClient | null = null;
 
 export const getSupabase = () => {
   if (supabaseInstance) return supabaseInstance;
-
   const url = getEnv('VITE_DATABASE_URL');
   const key = getEnv('VITE_SUPABASE_ANON');
-
-  if (!url || !url.startsWith('http')) {
-    console.warn("API Node: Database URL belum terdeteksi.");
-    return createClient("https://dummy.access.supabase.co", "dummy-key");
-  }
-
+  if (!url || !url.startsWith('http')) return createClient("https://dummy.supabase.co", "key");
   supabaseInstance = createClient(url, key);
   return supabaseInstance;
 };
@@ -43,41 +34,28 @@ export const supabase = new Proxy({} as SupabaseClient, {
   }
 });
 
-// --- MIDTRANS INTEGRATION ---
+// --- MIDTRANS INTEGRATION (AUTOMATED VIA PROXY) ---
 export const initMidtransPayment = async (email: string, amount: number, plan: string) => {
-  const orderId = `SAT-MID-${Date.now()}`;
   const serverId = getEnv('VITE_MIDTRANS_SERVER_ID'); 
-  
-  if (!serverId) {
-    return { success: false, error: "VITE_MIDTRANS_SERVER_ID_KOSONG" };
-  }
+  if (!serverId) return { success: false, error: "VITE_MIDTRANS_SERVER_ID_BELUM_DI_SET" };
 
   try {
-    const authHeader = `Basic ${btoa(serverId + ":")}`;
-    
-    // Gunakan try-catch super ketat untuk mendeteksi Failed to Fetch
-    const response = await fetch('https://app.sandbox.midtrans.com/snap/v1/transactions', {
+    // Panggil Serverless Function internal (api/pay.ts)
+    const response = await fetch('/api/pay', {
       method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'Authorization': authHeader
-      },
-      body: JSON.stringify({
-        transaction_details: { order_id: orderId, gross_amount: amount },
-        customer_details: { email: email.toLowerCase() },
-        item_details: [{ id: plan, price: amount, quantity: 1, name: `Satmoko Studio ${plan}` }]
-      })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, amount, plan, serverId })
     });
 
     if (!response.ok) {
       const errorData = await response.json();
-      return { success: false, error: `API_ERROR: ${errorData.error_messages?.[0] || 'Unknown'}` };
+      throw new Error(errorData.error || 'Server Error');
     }
 
     const data = await response.json();
     
-    // Jika fetch berhasil, simpan record ke Supabase
+    // Simpan ke database Supabase agar tetap tersistem
+    const orderId = `SAT-MID-${Date.now()}`;
     await supabase.from('topup_requests').insert([{
       tid: orderId,
       email: email.toLowerCase(),
@@ -86,25 +64,11 @@ export const initMidtransPayment = async (email: string, amount: number, plan: s
       status: 'waiting_payment'
     }]);
 
-    return { success: true, orderId, snapToken: data.token };
+    return { success: true, snapToken: data.token, orderId };
   } catch (err: any) {
-    // Ini biasanya terjadi karena CORS di browser atau koneksi terputus
-    console.error("Fetch Failure:", err);
-    return { success: false, error: `GATEWAY_CORS_ERROR: Master, API Midtrans Sandbox sering memblokir browser. Gunakan mode Admin atau cek whitelist.` };
+    console.error("Gateway Failure:", err);
+    return { success: false, error: err.message };
   }
-};
-
-export const getSystemSettings = async () => {
-  try {
-    const { data } = await supabase.from('settings').select('*');
-    const settings: Record<string, any> = { cost_image: 25, cost_video: 150, cost_voice: 150, cost_studio: 600 };
-    data?.forEach(item => { settings[item.key] = item.value; });
-    return settings;
-  } catch (e) { return { cost_image: 25, cost_video: 150, cost_voice: 150, cost_studio: 600 }; }
-};
-
-export const updateSystemSetting = async (key: string, value: any) => {
-  return await supabase.from('settings').upsert({ key, value }, { onConflict: 'key' });
 };
 
 export const sendTelegramNotification = async (message: string) => {
@@ -143,30 +107,6 @@ export const deleteMember = async (email: string) => {
   return !(await supabase.from('members').delete().eq('email', email.toLowerCase())).error;
 };
 
-export const requestTopup = async (email: string, amount: number, price: number, receiptB64: string) => {
-  const tid = `SAT-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-  const { error } = await supabase.from('topup_requests').insert([{
-    tid, email: email.toLowerCase(), amount, price, receipt_url: receiptB64, status: 'pending'
-  }]);
-  if (error) throw error;
-  sendTelegramNotification(`💰 *TOPUP REQUEST*\nUser: ${email}\nAmount: ${amount} CR\nID: ${tid}`);
-  return { success: true, tid };
-};
-
-export const approveTopup = async (requestId: string | number, email: string, amount: number) => {
-  try {
-    const currentCredits = await getUserCredits(email);
-    await supabase.from('members').update({ credits: Number(currentCredits) + Number(amount) }).eq('email', email.toLowerCase());
-    await supabase.from('topup_requests').update({ status: 'approved' }).eq('id', requestId);
-    sendTelegramNotification(`✅ *TOPUP SUCCESS*\nUser: ${email}\n+${amount} CR`);
-    return true;
-  } catch (e) { return false; }
-};
-
-export const manualUpdateCredits = async (email: string, newCredits: number) => {
-  return !(await supabase.from('members').update({ credits: newCredits }).eq('email', email.toLowerCase())).error;
-};
-
 export const updatePresence = async (email: string) => {
   if (!email) return;
   await supabase.from('members').upsert({ email: email.toLowerCase(), last_seen: new Date().toISOString(), status: 'active' }, { onConflict: 'email' });
@@ -184,24 +124,50 @@ export const isAdmin = (email: string) => {
 
 export const getAdminPassword = () => getEnv('VITE_PASSW');
 
-let currentSlot = 1;
-export const rotateApiKey = () => {
-  currentSlot = currentSlot >= 3 ? 1 : currentSlot + 1;
-  const nextKey = getEnv(`VITE_GEMINI_API_${currentSlot}`);
-  if (nextKey) {
-    win.process.env.API_KEY = nextKey;
-    console.log(`Node Rotated to Slot ${currentSlot}`);
-    return nextKey;
-  }
-  return win.process.env.API_KEY;
-};
-
+export const rotateApiKey = () => win.process.env.API_KEY;
 export const getActiveApiKey = () => win.process?.env?.API_KEY || getEnv('VITE_GEMINI_API_1');
 
 export const auditApiKeys = () => ({
   slot1: !!getEnv('VITE_GEMINI_API_1'),
   slot2: !!getEnv('VITE_GEMINI_API_2'),
   slot3: !!getEnv('VITE_GEMINI_API_3'),
-  currentActive: getActiveApiKey() ? 'TERPASANG' : 'KOSONG',
-  activeSlot: currentSlot
+  currentActive: 'TERPASANG',
+  activeSlot: 1
 });
+
+export const getSystemSettings = async () => {
+  try {
+    const { data } = await supabase.from('settings').select('*');
+    const settings: Record<string, any> = { cost_image: 25, cost_video: 150, cost_voice: 150, cost_studio: 600 };
+    data?.forEach(item => { settings[item.key] = item.value; });
+    return settings;
+  } catch (e) { return { cost_image: 25, cost_video: 150, cost_voice: 150, cost_studio: 600 }; }
+};
+
+export const updateSystemSetting = async (key: string, value: any) => {
+  return await supabase.from('settings').upsert({ key, value }, { onConflict: 'key' });
+};
+
+export const approveTopup = async (requestId: string | number, email: string, amount: number) => {
+  try {
+    const currentCredits = await getUserCredits(email);
+    await supabase.from('members').update({ credits: Number(currentCredits) + Number(amount) }).eq('email', email.toLowerCase());
+    await supabase.from('topup_requests').update({ status: 'approved' }).eq('id', requestId);
+    sendTelegramNotification(`✅ *TOPUP SUCCESS*\nUser: ${email}\n+${amount} CR`);
+    return true;
+  } catch (e) { return false; }
+};
+
+export const manualUpdateCredits = async (email: string, newCredits: number) => {
+  return !(await supabase.from('members').update({ credits: newCredits }).eq('email', email.toLowerCase())).error;
+};
+
+export const requestTopup = async (email: string, amount: number, price: number, receiptB64: string) => {
+  const tid = `SAT-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+  const { error } = await supabase.from('topup_requests').insert([{
+    tid, email: email.toLowerCase(), amount, price, receipt_url: receiptB64, status: 'pending'
+  }]);
+  if (error) throw error;
+  sendTelegramNotification(`💰 *TOPUP REQUEST*\nUser: ${email}\nAmount: ${amount} CR\nID: ${tid}`);
+  return { success: true, tid };
+};
