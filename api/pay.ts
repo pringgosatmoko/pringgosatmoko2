@@ -1,23 +1,16 @@
-
 // Vercel Serverless Function - Master High-Stability Bridge (Node.js Runtime)
 export default async function handler(req, res) {
-  // Fungsi pembantu untuk set headers secara konsisten
-  const setCorsHeaders = (response) => {
-    response.setHeader('Access-Control-Allow-Credentials', 'true');
-    response.setHeader('Access-Control-Allow-Origin', '*');
-    response.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-    response.setHeader(
-      'Access-Control-Allow-Headers',
-      'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-    );
-  };
-
-  // Selalu set headers di awal
-  setCorsHeaders(res);
+  // CORS Headers - Set immediately to prevent browser "Failed to fetch" on errors
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
+  );
 
   if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
+    return res.status(200).end();
   }
 
   if (req.method !== 'POST') {
@@ -27,25 +20,29 @@ export default async function handler(req, res) {
   try {
     const { email, amount, plan } = req.body;
     
-    // Deteksi Kunci Master
+    // Deteksi Kunci Master - Mendukung prefix VITE_ maupun tidak
     const serverKey = process.env.VITE_MIDTRANS_SERVER_ID || process.env.MIDTRANS_SERVER_ID;
     
     if (!serverKey) {
-      console.error("[CRITICAL] Server Key tidak ditemukan!");
+      console.error("[MIDTRANS] Server Key missing!");
       return res.status(500).json({ 
-        error: 'SERVER_KEY_MISSING',
-        details: 'Variabel lingkungan VITE_MIDTRANS_SERVER_ID belum diatur di Vercel Dashboard.'
+        error: 'SERVER_KEY_NOT_FOUND',
+        details: 'Pastikan VITE_MIDTRANS_SERVER_ID diatur di Vercel Dashboard.'
       });
     }
 
-    // Encoding paling aman untuk Node.js
-    // Fix: Using (Buffer as any) to resolve TypeScript error when node types are not available
-    const authHeader = `Basic ${(Buffer as any).from(serverKey + ":").toString('base64')}`;
+    // Auth Header using btoa (Standard in Node.js 16+ and Browsers)
+    // Fix: Using btoa instead of Buffer to resolve TypeScript error in serverless environments
+    const authHeader = `Basic ${btoa(serverKey + ":")}`;
     const orderId = `SAT-MID-${Date.now()}`;
 
-    console.log(`[PAYMENT_INIT] ${email} - Order: ${orderId}`);
+    console.log(`[PAYMENT_START] Order: ${orderId} for ${email}`);
 
-    const midtransResponse = await fetch('https://app.sandbox.midtrans.com/snap/v1/transactions', {
+    // Fetch Midtrans with AbortController to handle potential hang/timeout
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000); // 8 seconds limit
+
+    const response = await fetch('https://app.sandbox.midtrans.com/snap/v1/transactions', {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
@@ -56,29 +53,32 @@ export default async function handler(req, res) {
         transaction_details: { order_id: orderId, gross_amount: amount },
         customer_details: { email: email.toLowerCase() },
         item_details: [{ id: plan, price: amount, quantity: 1, name: `Satmoko Studio ${plan}` }]
-      })
+      }),
+      signal: controller.signal
     });
 
-    const data = await midtransResponse.json();
+    clearTimeout(timeout);
+    const data = await response.json();
 
-    if (!midtransResponse.ok) {
-      console.error("[MIDTRANS_ERROR]", data);
-      return res.status(midtransResponse.status).json({ 
-        error: 'MIDTRANS_API_ERROR', 
-        details: data.error_messages ? data.error_messages[0] : 'Gagal memproses ke Midtrans' 
+    if (!response.ok) {
+      console.error("[MIDTRANS_REJECTED]", data);
+      return res.status(response.status).json({ 
+        error: 'GATEWAY_ERROR', 
+        details: data.error_messages ? data.error_messages[0] : 'Midtrans rejected the request' 
       });
     }
 
-    // Sukses
+    console.log(`[PAYMENT_SUCCESS] Token issued for ${orderId}`);
     return res.status(200).json(data);
+
   } catch (error: any) {
-    console.error("[SERVERLESS_CRASH]", error.message);
-    // PASTIKAN headers tetap ada meskipun error
-    setCorsHeaders(res);
+    console.error("[SERVER_ERROR]", error.name === 'AbortError' ? 'Request Timeout' : error.message);
+    
+    const isTimeout = error.name === 'AbortError';
     return res.status(500).json({ 
-      error: "INTERNAL_SERVER_ERROR", 
-      details: error.message,
-      suggestion: "Cek Log Vercel Master untuk detail lebih lanjut."
+      error: isTimeout ? 'GATEWAY_TIMEOUT' : 'INTERNAL_SERVER_ERROR', 
+      details: isTimeout ? 'Midtrans Sandbox merespon terlalu lama.' : error.message,
+      suggestion: "Cek koneksi internet atau status Midtrans Sandbox."
     });
   }
 }
