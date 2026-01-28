@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -90,8 +89,8 @@ export const AspectRatioEditor: React.FC<AspectRatioEditorProps> = ({ onBack, la
       return;
     }
 
-    const apiKey = getActiveApiKey();
-    if (!apiKey) {
+    // Fix: Always use process.env.API_KEY directly as per guidelines
+    if (!process.env.API_KEY) {
       addLog("Gagal: API Key tidak terdeteksi. Silakan cek Vercel Master.", "error");
       return;
     }
@@ -106,7 +105,8 @@ export const AspectRatioEditor: React.FC<AspectRatioEditorProps> = ({ onBack, la
         refreshCredits();
       }
 
-      const ai = new GoogleGenAI({ apiKey });
+      // Fix: Initialize GoogleGenAI with process.env.API_KEY directly
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
       const imagePart = {
         inlineData: {
@@ -133,6 +133,7 @@ export const AspectRatioEditor: React.FC<AspectRatioEditorProps> = ({ onBack, la
       });
 
       if (response?.candidates?.[0]?.content?.parts) {
+        // Fix: Iterate through all parts to find the image part
         for (const part of response.candidates[0].content.parts) {
           if (part.inlineData) {
             setResultImage(`data:${part.inlineData.mimeType};base64,${part.inlineData.data}`);

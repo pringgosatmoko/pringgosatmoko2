@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI, Type, Modality, VideoGenerationReferenceType } from '@google/genai';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -108,8 +107,8 @@ export const StudioCreator: React.FC<StudioCreatorProps> = ({ onBack, lang, user
     setIsProcessing(true);
     addLog(retryCount > 0 ? `Mencoba ulang desain cerita... (${retryCount})` : `Merancang alur cerita...`);
     try {
-      // Correct: Use process.env.API_KEY directly as per guidelines.
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+      // Fix: Use process.env.API_KEY directly as per guidelines.
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const imageParts = refImages.map(img => ({
         inlineData: { data: img.split(',')[1], mimeType: img.match(/data:([^;]+);/)?.[1] || 'image/png' }
       }));
@@ -180,8 +179,8 @@ export const StudioCreator: React.FC<StudioCreatorProps> = ({ onBack, lang, user
     addLog(`Membuat suara adegan ${index + 1}...`);
     setStoryboard(prev => prev.map((s, i) => i === index ? { ...s, isAudioLoading: true } : s));
     try {
-      // Correct: Use process.env.API_KEY directly as per guidelines.
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+      // Fix: Use process.env.API_KEY directly as per guidelines.
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts", 
         contents: [{ parts: [{ text: storyboard[index].audio }] }],
@@ -259,8 +258,8 @@ export const StudioCreator: React.FC<StudioCreatorProps> = ({ onBack, lang, user
         refreshCredits();
       }
       
-      // Correct: Use process.env.API_KEY directly as per guidelines.
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+      // Fix: Use process.env.API_KEY directly as per guidelines.
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const selectedStyle = stylePresets.find(s => s.name === videoStyle);
       
       let actualRatio = aspectRatio === '21:9' ? '16:9' : aspectRatio;
@@ -296,7 +295,7 @@ export const StudioCreator: React.FC<StudioCreatorProps> = ({ onBack, lang, user
       
       const uri = operation.response?.generatedVideos?.[0]?.video?.uri;
       if (uri) {
-        // Correct: Append process.env.API_KEY for fetching the video bytes.
+        // Fix: Append process.env.API_KEY for fetching the video bytes.
         const resp = await fetch(`${uri}&key=${process.env.API_KEY}`);
         const blob = await resp.blob();
         const videoUrl = URL.createObjectURL(new Blob([blob], { type: 'video/mp4' }));

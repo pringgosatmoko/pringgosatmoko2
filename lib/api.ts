@@ -34,13 +34,11 @@ export const supabase = new Proxy({} as SupabaseClient, {
   }
 });
 
-// --- MIDTRANS INTEGRATION (ULTRA STABLE) ---
+// --- MIDTRANS INTEGRATION (FINAL STABLE) ---
 export const initMidtransPayment = async (email: string, amount: number, plan: string) => {
   try {
-    // Gunakan URL absolut untuk menghindari masalah routing di beberapa browser mobile
-    const apiUrl = `${window.location.origin}/api/pay`;
-    
-    const response = await fetch(apiUrl, {
+    // Gunakan relative path sederhana, Vercel otomatis mengarahkan ke fungsi lokal
+    const response = await fetch('/api/pay', {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
@@ -51,12 +49,13 @@ export const initMidtransPayment = async (email: string, amount: number, plan: s
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `Server Error ${response.status}`);
+      throw new Error(errorData.error || `HTTP ${response.status}`);
     }
 
     const data = await response.json();
     const orderId = `SAT-MID-${Date.now()}`;
     
+    // Simpan log ke Supabase
     await supabase.from('topup_requests').insert([{
       tid: orderId,
       email: email.toLowerCase(),
@@ -67,10 +66,10 @@ export const initMidtransPayment = async (email: string, amount: number, plan: s
 
     return { success: true, snapToken: data.token, orderId };
   } catch (err: any) {
-    console.error("Critical Gateway Error:", err);
-    // Deteksi error koneksi
-    if (err.message.includes('fetch')) {
-      return { success: false, error: "Koneksi ke server pembayaran terhalang (Cek Pop-up Browser)" };
+    console.error("Fetch Failure:", err);
+    // Pesan khusus untuk Master agar tahu ini masalah koneksi browser
+    if (err.message === 'Failed to fetch') {
+      return { success: false, error: "Gagal Terhubung ke Server. Pastikan Internet Stabil & Mode Hemat Data Mati." };
     }
     return { success: false, error: err.message };
   }

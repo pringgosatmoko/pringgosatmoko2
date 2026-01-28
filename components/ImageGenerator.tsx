@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -89,24 +88,32 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onBack, lang, us
 
   const generateSingleVariant = async (parts: any[]): Promise<string | null> => {
     try {
-      // Ambil key aktif dengan fallback ke VITE_ prefix jika process.env mati
-      const currentKey = getActiveApiKey();
+      // Fix: Always use process.env.API_KEY directly as per guidelines
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
-      const ai = new GoogleGenAI({ apiKey: currentKey });
+      // Fix: Select model based on quality requirement as per guidelines
+      const modelName = (imageSize === '2K' || imageSize === '4K') ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
       
+      const config: any = { 
+        imageConfig: { 
+          aspectRatio: aspectRatio as any
+        }, 
+        temperature: 0.9 
+      };
+
+      // imageSize is only supported on gemini-3-pro-image-preview
+      if (modelName === 'gemini-3-pro-image-preview') {
+        config.imageConfig.imageSize = imageSize as any;
+      }
+
       const response = await ai.models.generateContent({ 
-        model: 'gemini-3-pro-image-preview', 
+        model: modelName, 
         contents: { parts },
-        config: { 
-          imageConfig: { 
-            aspectRatio: aspectRatio as any,
-            imageSize: imageSize as any
-          }, 
-          temperature: 0.9 
-        }
+        config: config
       });
 
       if (response?.candidates?.[0]?.content?.parts) {
+        // Fix: Iterate through all parts to find the image part
         for (const part of response.candidates[0].content.parts) {
           if (part.inlineData) return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
         }
