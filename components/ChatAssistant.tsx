@@ -80,7 +80,7 @@ GAYA KOMUNIKASI:
       setMessages(prev => [...prev, { role: 'assistant', text: reply }]);
     } catch (e: any) {
       console.error("Chat Error:", e);
-      const errorMsg = e.message || "";
+      const errorMsg = String(e?.message || (e ? JSON.stringify(e) : ""));
       if ((errorMsg.includes('429') || errorMsg.includes('quota')) && retryCount < 2) {
         rotateApiKey(); 
         setTimeout(() => handleSend(retryCount + 1), 1000); 

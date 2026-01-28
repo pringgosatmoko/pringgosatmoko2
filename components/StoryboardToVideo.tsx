@@ -188,7 +188,7 @@ export const StoryboardToVideo: React.FC<StoryboardToVideoProps> = ({ onBack, la
                 }
               }
            } catch (err: any) {
-              const errMsg = err?.message || JSON.stringify(err);
+              const errMsg = String(err?.message || (err ? JSON.stringify(err) : "Unknown Error"));
               if (errMsg.includes('429') || errMsg.includes('quota')) {
                  rotateApiKey();
                  imgRetry++;
@@ -201,7 +201,7 @@ export const StoryboardToVideo: React.FC<StoryboardToVideoProps> = ({ onBack, la
       addLog(`Visualisasi ${images.length} adegan selesai!`, "success");
       isSuccess = true;
     } catch (e: any) {
-      const errorMsg = e?.message || JSON.stringify(e);
+      const errorMsg = String(e?.message || (e ? JSON.stringify(e) : "Unknown Error"));
       if ((errorMsg.includes('429') || errorMsg.includes('quota')) && retryCount < 3) {
         rotateApiKey();
         setTimeout(() => generateSceneImages(retryCount + 1), 1500);
@@ -284,7 +284,7 @@ export const StoryboardToVideo: React.FC<StoryboardToVideoProps> = ({ onBack, la
         isSuccess = true;
       }
     } catch (e: any) {
-      const errorMsg = e?.message || JSON.stringify(e);
+      const errorMsg = String(e?.message || (e ? JSON.stringify(e) : "Unknown Error"));
       if (errorMsg.includes('403')) {
          addLog("Node Error (403): Kunci ini tidak diizinkan akses Veo. Wajib Kunci Project BERBAYAR.", "error");
          if (retryCount < 2) {

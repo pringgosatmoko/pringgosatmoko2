@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -161,7 +162,7 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onBack, lang, us
         rotateApiKey();
       }
     } catch (e: any) { 
-      const errorMsg = e?.message || JSON.stringify(e);
+      const errorMsg = String(e?.message || (e ? JSON.stringify(e) : "Unknown Error"));
       if (errorMsg.includes('Requested entity was not found') || errorMsg.includes('429') || errorMsg.includes('API key')) {
         addLog("Node sibuk atau kunci bermasalah, merotasi kunci...", "warning");
         rotateApiKey();
@@ -192,7 +193,7 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onBack, lang, us
       2. REFERENCE (CRITICAL): Upload photos (max 3) so AI knows the face or object to replicate.
       3. 4K RESOLUTION: Select 4K for maximum sharpness. Note: 4K costs 3x more than 1K.
       4. VARIATION: Select '4 VAR' to render 4 different options at once.
-      5. STYLE: Choose styles like 'Disney Pixar' or 'Realistic' for your project.`
+      5. STYLE: Choose styles like 'Disney Pixar' for your project.`
     }
   }[lang];
 

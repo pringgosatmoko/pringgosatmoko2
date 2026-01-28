@@ -212,7 +212,7 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({ mode, onBack, la
         addLog("Video berhasil dibuat!", "success");
       }
     } catch (e: any) { 
-      const errorMsg = e?.message || JSON.stringify(e);
+      const errorMsg = String(e?.message || (e ? JSON.stringify(e) : "Unknown Error"));
       if ((errorMsg.includes('Requested entity was not found') || errorMsg.includes('429') || errorMsg.includes('quota')) && retryCount < 2) {
         addLog("Jalur padat, mencoba rotasi kunci...", "warning");
         rotateApiKey();

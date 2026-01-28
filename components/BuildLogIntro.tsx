@@ -77,16 +77,22 @@ export const BuildLogIntro: React.FC<BuildLogIntroProps> = ({ onComplete }) => {
               </div>
 
               <div className="p-6 space-y-2 h-[400px] overflow-y-auto no-scrollbar">
-                {logs.map((log, i) => (
-                  <motion.p 
-                    initial={{ opacity: 0, x: -5 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    key={i} 
-                    className={`text-[11px] leading-relaxed tracking-wider ${log.includes('Success') ? 'text-green-400 font-black' : log.includes('warn') ? 'text-yellow-500/80' : 'text-slate-400'}`}
-                  >
-                    {log}
-                  </motion.p>
-                ))}
+                {logs.map((log, i) => {
+                  const safeLog = String(log || "");
+                  const isSuccess = safeLog.includes('Success');
+                  const isWarning = safeLog.includes('warn');
+                  
+                  return (
+                    <motion.p 
+                      initial={{ opacity: 0, x: -5 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      key={i} 
+                      className={`text-[11px] leading-relaxed tracking-wider ${isSuccess ? 'text-green-400 font-black' : isWarning ? 'text-yellow-500/80' : 'text-slate-400'}`}
+                    >
+                      {safeLog}
+                    </motion.p>
+                  );
+                })}
                 <motion.div 
                   animate={{ opacity: [0, 1, 0] }}
                   transition={{ repeat: Infinity, duration: 0.8 }}

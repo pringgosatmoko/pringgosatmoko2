@@ -21,7 +21,7 @@ export const getSupabase = () => {
   if (supabaseInstance) return supabaseInstance;
   const url = getEnv('VITE_DATABASE_URL');
   const key = getEnv('VITE_SUPABASE_ANON');
-  if (!url || !url.startsWith('http')) return createClient("https://dummy.supabase.co", "key");
+  if (!url || !String(url).startsWith('http')) return createClient("https://dummy.supabase.co", "key");
   supabaseInstance = createClient(url, key);
   return supabaseInstance;
 };
@@ -44,24 +44,21 @@ export const initMidtransPayment = async (email: string, amount: number, plan: s
       headers: { 
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ email, amount, plan })
+      body: JSON.stringify({ email: String(email || "").toLowerCase(), amount, plan })
     });
 
     const data = await response.json();
 
     if (!response.ok) {
-      // Menangkap detail error dari backend Master
       const errorMsg = data.details || data.error || `Error ${response.status}`;
-      throw new Error(errorMsg);
+      throw new Error(String(errorMsg));
     }
 
-    // Jika sampai sini, berarti token didapat
     const orderId = `SAT-MID-${Date.now()}`;
     
-    // Log ke Supabase (status pending)
     await supabase.from('topup_requests').insert([{
       tid: orderId,
-      email: email.toLowerCase(),
+      email: String(email || "").toLowerCase(),
       amount: plan === '1B' ? 1000 : plan === '3B' ? 3500 : 15000,
       price: amount,
       status: 'waiting_payment'
@@ -70,10 +67,10 @@ export const initMidtransPayment = async (email: string, amount: number, plan: s
     return { success: true, snapToken: data.token, orderId };
   } catch (err: any) {
     console.error("Critical Payment Error:", err.message);
-    let userMsg = err.message;
+    const userMsg = String(err?.message || "Unknown Connection Error");
     
-    if (err.message === 'Failed to fetch') {
-      userMsg = "Koneksi ke API Master Terputus. Pastikan Vercel Function tidak Crash.";
+    if (userMsg.includes('Failed to fetch')) {
+      return { success: false, error: "Koneksi ke API Master Terputus. Pastikan Vercel Function tidak Crash." };
     }
     
     return { success: false, error: userMsg };
@@ -94,31 +91,35 @@ export const sendTelegramNotification = async (message: string) => {
 };
 
 export const getUserCredits = async (email: string): Promise<number> => {
-  const { data } = await supabase.from('members').select('credits').eq('email', email.toLowerCase()).single();
+  if (!email || typeof email !== 'string') return 0;
+  const { data } = await supabase.from('members').select('credits').eq('email', String(email).toLowerCase()).single();
   return data?.credits || 0;
 };
 
 export const deductCredits = async (email: string, amount: number): Promise<boolean> => {
+  if (!email || typeof email !== 'string') return false;
   if (isAdmin(email)) return true;
   const current = await getUserCredits(email);
   if (current < amount) return false;
-  const { error } = await supabase.from('members').update({ credits: current - amount }).eq('email', email.toLowerCase());
+  const { error } = await supabase.from('members').update({ credits: current - amount }).eq('email', String(email).toLowerCase());
   return !error;
 };
 
 export const updateMemberStatus = async (email: string, status: string, validUntil?: string | null) => {
+  if (!email || typeof email !== 'string') return false;
   const updateData: any = { status };
   if (validUntil !== undefined) updateData.valid_until = validUntil;
-  return !(await supabase.from('members').update(updateData).eq('email', email.toLowerCase())).error;
+  return !(await supabase.from('members').update(updateData).eq('email', String(email).toLowerCase())).error;
 };
 
 export const deleteMember = async (email: string) => {
-  return !(await supabase.from('members').delete().eq('email', email.toLowerCase())).error;
+  if (!email || typeof email !== 'string') return false;
+  return !(await supabase.from('members').delete().eq('email', String(email).toLowerCase())).error;
 };
 
 export const updatePresence = async (email: string) => {
-  if (!email) return;
-  await supabase.from('members').upsert({ email: email.toLowerCase(), last_seen: new Date().toISOString(), status: 'active' }, { onConflict: 'email' });
+  if (!email || typeof email !== 'string') return;
+  await supabase.from('members').upsert({ email: String(email).toLowerCase(), last_seen: new Date().toISOString(), status: 'active' }, { onConflict: 'email' });
 };
 
 export const isUserOnline = (lastSeen: string | null | undefined) => {
@@ -126,9 +127,11 @@ export const isUserOnline = (lastSeen: string | null | undefined) => {
   return (new Date().getTime() - new Date(lastSeen).getTime()) / 1000 < 150; 
 };
 
-export const isAdmin = (email: string) => {
-  const admins = (getEnv('VITE_ADMIN_EMAILS') || 'pringgosatmoko@gmail.com').toLowerCase().split(',');
-  return admins.includes(email.toLowerCase());
+export const isAdmin = (email: any) => {
+  if (!email || typeof email !== 'string') return false;
+  const adminConfig = getEnv('VITE_ADMIN_EMAILS') || 'pringgosatmoko@gmail.com';
+  const admins = String(adminConfig).toLowerCase().split(',');
+  return Array.isArray(admins) && admins.includes(String(email).toLowerCase());
 };
 
 export const getAdminPassword = () => getEnv('VITE_PASSW');
@@ -159,8 +162,9 @@ export const updateSystemSetting = async (key: string, value: any) => {
 
 export const approveTopup = async (requestId: string | number, email: string, amount: number) => {
   try {
+    if (!email || typeof email !== 'string') return false;
     const currentCredits = await getUserCredits(email);
-    await supabase.from('members').update({ credits: Number(currentCredits) + Number(amount) }).eq('email', email.toLowerCase());
+    await supabase.from('members').update({ credits: Number(currentCredits) + Number(amount) }).eq('email', String(email).toLowerCase());
     await supabase.from('topup_requests').update({ status: 'approved' }).eq('id', requestId);
     sendTelegramNotification(`✅ *TOPUP SUCCESS*\nUser: ${email}\n+${amount} CR`);
     return true;
@@ -168,13 +172,15 @@ export const approveTopup = async (requestId: string | number, email: string, am
 };
 
 export const manualUpdateCredits = async (email: string, newCredits: number) => {
-  return !(await supabase.from('members').update({ credits: newCredits }).eq('email', email.toLowerCase())).error;
+  if (!email || typeof email !== 'string') return false;
+  return !(await supabase.from('members').update({ credits: newCredits }).eq('email', String(email).toLowerCase())).error;
 };
 
 export const requestTopup = async (email: string, amount: number, price: number, receiptB64: string) => {
+  if (!email || typeof email !== 'string') throw new Error("Email required");
   const tid = `SAT-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
   const { error } = await supabase.from('topup_requests').insert([{
-    tid, email: email.toLowerCase(), amount, price, receipt_url: receiptB64, status: 'pending'
+    tid, email: String(email).toLowerCase(), amount, price, receipt_url: receiptB64, status: 'pending'
   }]);
   if (error) throw error;
   sendTelegramNotification(`💰 *TOPUP REQUEST*\nUser: ${email}\nAmount: ${amount} CR\nID: ${tid}`);

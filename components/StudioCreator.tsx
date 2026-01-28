@@ -1,7 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { GoogleGenAI, Type, Modality, VideoGenerationReferenceType } from '@google/genai';
 import { motion, AnimatePresence } from 'framer-motion';
-import { deductCredits, sendTelegramNotification, getSystemSettings, rotateApiKey } from '../lib/api';
+import { deductCredits, getSystemSettings, rotateApiKey } from '../lib/api';
 
 interface StoryboardItem {
   scene: string;
@@ -34,6 +35,7 @@ interface StudioCreatorProps {
   refreshCredits: () => void;
 }
 
+// Fix: Correctly define the component as React.FC to avoid the 'void' type error.
 export const StudioCreator: React.FC<StudioCreatorProps> = ({ onBack, lang, userEmail, credits, refreshCredits }) => {
   const [title, setTitle] = useState('');
   const [projectType, setProjectType] = useState<'Iklan' | 'Film'>('Iklan');
@@ -103,11 +105,11 @@ export const StudioCreator: React.FC<StudioCreatorProps> = ({ onBack, lang, user
     }
   };
 
+  // Correct: Use process.env.API_KEY directly and access .text property from GenerateContentResponse
   const constructProject = async (retryCount = 0) => {
     setIsProcessing(true);
     addLog(retryCount > 0 ? `Mencoba ulang desain cerita... (${retryCount})` : `Merancang alur cerita...`);
     try {
-      // Fix: Use process.env.API_KEY directly as per guidelines.
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const imageParts = refImages.map(img => ({
         inlineData: { data: img.split(',')[1], mimeType: img.match(/data:([^;]+);/)?.[1] || 'image/png' }
@@ -165,13 +167,13 @@ export const StudioCreator: React.FC<StudioCreatorProps> = ({ onBack, lang, user
       setStep('story');
       addLog("Alur cerita siap!", "success");
     } catch (e: any) { 
-      const errorMsg = e?.message || "";
+      const errorMsg = String(e?.message || (e ? JSON.stringify(e) : ""));
       if ((errorMsg.includes('429') || errorMsg.includes('quota')) && retryCount < 3) {
         rotateApiKey();
         await new Promise(r => setTimeout(r, Math.pow(2, retryCount) * 1000));
         return constructProject(retryCount + 1);
       }
-      addLog(`Gagal: ${e.message}`, "error"); 
+      addLog(`Gagal: ${errorMsg}`, "error"); 
     } finally { setIsProcessing(false); }
   };
 
@@ -179,7 +181,6 @@ export const StudioCreator: React.FC<StudioCreatorProps> = ({ onBack, lang, user
     addLog(`Membuat suara adegan ${index + 1}...`);
     setStoryboard(prev => prev.map((s, i) => i === index ? { ...s, isAudioLoading: true } : s));
     try {
-      // Fix: Use process.env.API_KEY directly as per guidelines.
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts", 
@@ -191,10 +192,10 @@ export const StudioCreator: React.FC<StudioCreatorProps> = ({ onBack, lang, user
       });
       const base64Audio = response?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
       if (base64Audio) {
+         // Manual audio decoding as per guidelines
          const binaryString = atob(base64Audio);
          const bytes = new Uint8Array(binaryString.length);
          for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
-         
          const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
          const dataInt16 = new Int16Array(bytes.buffer);
          const buffer = audioContext.createBuffer(1, dataInt16.length, 24000);
@@ -231,7 +232,7 @@ export const StudioCreator: React.FC<StudioCreatorProps> = ({ onBack, lang, user
         addLog(`Suara adegan ${index + 1} selesai.`, "success");
       }
     } catch (e: any) { 
-      const errorMsg = e?.message || "";
+      const errorMsg = String(e?.message || (e ? JSON.stringify(e) : ""));
       if ((errorMsg.includes('429') || errorMsg.includes('quota')) && retryCount < 3) {
         rotateApiKey();
         await new Promise(r => setTimeout(r, Math.pow(2, retryCount) * 500));
@@ -258,12 +259,9 @@ export const StudioCreator: React.FC<StudioCreatorProps> = ({ onBack, lang, user
         refreshCredits();
       }
       
-      // Fix: Use process.env.API_KEY directly as per guidelines.
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const selectedStyle = stylePresets.find(s => s.name === videoStyle);
-      
       let actualRatio = aspectRatio === '21:9' ? '16:9' : aspectRatio;
-
       const finalPrompt = `${storyboard[index].visual}. Gaya: ${selectedStyle?.prompt}. Subjek: ${charBio}. Cinematic lighting, 8k.`;
       
       const referenceImagesPayload = refImages.map(img => ({
@@ -295,7 +293,6 @@ export const StudioCreator: React.FC<StudioCreatorProps> = ({ onBack, lang, user
       
       const uri = operation.response?.generatedVideos?.[0]?.video?.uri;
       if (uri) {
-        // Fix: Append process.env.API_KEY for fetching the video bytes.
         const resp = await fetch(`${uri}&key=${process.env.API_KEY}`);
         const blob = await resp.blob();
         const videoUrl = URL.createObjectURL(new Blob([blob], { type: 'video/mp4' }));
@@ -304,7 +301,7 @@ export const StudioCreator: React.FC<StudioCreatorProps> = ({ onBack, lang, user
         isSuccess = true;
       }
     } catch (e: any) { 
-      const errorMsg = e?.message || "";
+      const errorMsg = String(e?.message || (e ? JSON.stringify(e) : ""));
       if ((errorMsg.includes('429') || errorMsg.includes('quota')) && retryCount < 3) {
         rotateApiKey();
         await new Promise(r => setTimeout(r, Math.pow(2, retryCount) * 1000));
@@ -320,248 +317,112 @@ export const StudioCreator: React.FC<StudioCreatorProps> = ({ onBack, lang, user
     }
   };
 
-  const t = {
-    id: {
-      title: "Studio Iklan",
-      subtitle: "Bikin Iklan Sinematik dengan AI",
-      config: "Pengaturan Produksi",
-      gender: "Kelamin",
-      age: "Umur",
-      duration: "Durasi Total",
-      style: "Gaya Visual",
-      camera: "Sudut Kamera",
-      type: "Tipe Proyek",
-      ratio: "Bentuk Video",
-      ref: "Foto Contoh (Maks 3)",
-      prompt: "Ide Cerita / Deskripsi Produk",
-      cost: "Estimasi Biaya",
-      start: "MULAI BIKIN",
-      back: "KEMBALI",
-      male: "Pria",
-      female: "Wanita",
-      adult: "Dewasa",
-      child: "Anak",
-      ad: "Iklan",
-      film: "Film",
-      guideTitle: "PANDUAN STUDIO",
-      guideContent: `Modul Studio Creator merancang video profesional secara otomatis.
-      1. Masukkan konsep/ide di kolom teks.
-      2. Lampirkan foto produk/karakter untuk referensi wajah & objek.
-      3. Pilih target audience untuk menyesuaikan suara (TTS).
-      4. Sistem akan membuat alur adegan (storyboard).
-      5. Anda merender visual per adegan sesuai kebutuhan.`
-    }
-  }['id'];
-
   return (
-    <div className="space-y-6 pb-40 max-w-7xl mx-auto">
-      <div className="fixed top-6 right-6 z-[400] w-72 flex flex-col gap-2 pointer-events-none">
-        <AnimatePresence>
-          {processLogs.map((log) => (
-            <motion.div 
-              key={log.id} 
-              initial={{ opacity: 0, x: 50 }} 
-              animate={{ opacity: 1, x: 0 }} 
-              exit={{ opacity: 0, scale: 0.9 }} 
-              drag="x"
-              dragConstraints={{ left: -100, right: 100 }}
-              onDragEnd={(_, info) => { if (Math.abs(info.offset.x) > 40) removeLog(log.id); }}
-              className={`p-4 rounded-2xl glass-panel border-l-4 shadow-2xl flex flex-col gap-1 backdrop-blur-3xl pointer-events-auto cursor-grab active:cursor-grabbing ${log.type === 'success' ? 'border-l-cyan-500 bg-cyan-500/10' : log.type === 'error' ? 'border-l-red-500 bg-red-500/20' : 'border-l-white/20 bg-white/5'}`}
-            >
-              <div className="flex justify-between items-center mb-0.5">
-                <p className="text-[10px] font-bold text-white leading-tight">{log.msg}</p>
-              </div>
-              <span className="text-[7px] text-slate-500 uppercase font-black">{log.time}</span>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
-
+    <div className="space-y-6 pb-40">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <button onClick={onBack} className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-500 hover:text-white transition-all"><i className="fa-solid fa-chevron-left"></i></button>
-          <button onClick={() => setShowGuide(!showGuide)} className={`w-10 h-10 rounded-xl border transition-all flex items-center justify-center shadow-xl ${showGuide ? 'bg-yellow-500 text-black border-yellow-400 shadow-yellow-500/20' : 'bg-white/5 border-white/5 text-yellow-500'}`}>
-            <i className={`fa-solid ${showGuide ? 'fa-xmark' : 'fa-question'} text-[10px]`}></i>
+          <button onClick={onBack} className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-500 hover:text-white transition-all shadow-xl">
+            <i className="fa-solid fa-chevron-left text-xs"></i>
           </button>
-          <div>
-            <h2 className="text-2xl font-black italic uppercase">{t.title} <span className="text-yellow-500">Pro</span></h2>
-            <p className="text-[8px] font-black uppercase tracking-[0.4em] text-slate-600">Produksi Kilat Berkualitas</p>
-          </div>
+          <h2 className="text-2xl font-black italic uppercase tracking-tighter">Studio <span className="text-yellow-500">Creator</span></h2>
         </div>
         <div className="text-right">
-           <p className="text-[9px] font-black uppercase text-slate-600 tracking-widest leading-none mb-1">Saldo Anda</p>
+           <p className="text-[8px] font-black uppercase text-slate-600 tracking-widest leading-none mb-1">Saldo Master</p>
            <p className="text-xl font-black italic text-cyan-400 leading-none">{credits.toLocaleString()} CR</p>
         </div>
       </div>
 
-      <AnimatePresence>
-        {showGuide && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-            <div className="glass-panel p-8 rounded-[2.5rem] bg-yellow-500/5 border border-yellow-500/20 mb-4 shadow-2xl">
-               <p className="text-[9px] font-black text-yellow-500 uppercase tracking-[0.4em] mb-3">{t.guideTitle}</p>
-               <p className="text-[11px] text-slate-300 font-bold uppercase tracking-widest leading-relaxed whitespace-pre-line">
-                 {t.guideContent}
-               </p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       <AnimatePresence mode="wait">
         {step === 'input' ? (
-          <motion.div key="input" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <div className="lg:col-span-5 space-y-4">
-              <section className="glass-panel p-8 rounded-[3rem] bg-slate-900/40 space-y-6 shadow-2xl border-white/5">
-                <p className="text-[9px] font-black uppercase text-yellow-500 tracking-[0.2em]">{t.config}</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                     <label className="text-[8px] font-black uppercase text-slate-600 px-1">{t.type}</label>
-                     <div className="flex bg-black/40 p-1 rounded-xl border border-white/5">
-                        <button onClick={() => setProjectType('Iklan')} className={`flex-1 py-2 rounded-lg text-[9px] font-black transition-all ${projectType === 'Iklan' ? 'bg-cyan-500 text-black' : 'text-slate-600'}`}>{t.ad}</button>
-                        <button onClick={() => setProjectType('Film')} className={`flex-1 py-2 rounded-lg text-[9px] font-black transition-all ${projectType === 'Film' ? 'bg-cyan-500 text-black' : 'text-slate-600'}`}>{t.film}</button>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <div className="lg:col-span-7 space-y-6">
+               <div className="glass-panel p-8 rounded-[3rem] bg-slate-900/40 space-y-6 border-white/5 shadow-2xl">
+                  <div className="space-y-4">
+                     <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-2">Detail Produksi</label>
+                     <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="Judul Iklan/Film..." className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 px-6 text-sm text-white font-bold outline-none" />
+                     <div className="grid grid-cols-2 gap-4">
+                        <select value={projectType} onChange={e => setProjectType(e.target.value as any)} className="bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-[10px] text-white font-black uppercase outline-none">
+                           <option>Iklan</option><option>Film</option>
+                        </select>
+                        <select value={videoStyle} onChange={e => setVideoStyle(e.target.value)} className="bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-[10px] text-white font-black uppercase outline-none">
+                           {stylePresets.map(s => <option key={s.name}>{s.name}</option>)}
+                        </select>
                      </div>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-[8px] font-black uppercase text-slate-600 px-1">{t.ratio}</label>
-                    <select value={aspectRatio} onChange={e => setAspectRatio(e.target.value as any)} className="w-full bg-black/40 border border-white/5 rounded-xl py-2.5 px-3 text-[10px] text-white font-black outline-none">
-                      <option value="16:9">Lanskap (16:9)</option>
-                      <option value="9:16">Tegak (9:16)</option>
-                      <option value="1:1">Kotak (1:1)</option>
-                      <option value="21:9">Bioskop (21:9)</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                     <label className="text-[8px] font-black uppercase text-slate-600 px-1">{t.gender}</label>
-                     <div className="flex bg-black/40 p-1 rounded-xl border border-white/5">
-                        <button onClick={() => setTargetGender('Pria')} className={`flex-1 py-2 rounded-lg text-[9px] font-black transition-all ${targetGender === 'Pria' ? 'bg-white/10 text-white' : 'text-slate-600'}`}>{t.male}</button>
-                        <button onClick={() => setTargetGender('Wanita')} className={`flex-1 py-2 rounded-lg text-[9px] font-black transition-all ${targetGender === 'Wanita' ? 'bg-white/10 text-white' : 'text-slate-600'}`}>{t.female}</button>
+                  <div className="space-y-4">
+                     <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-2">Karakter & Target</label>
+                     <div className="grid grid-cols-2 gap-4">
+                        <select value={targetAge} onChange={e => setTargetAge(e.target.value as any)} className="bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-[10px] text-white font-black uppercase outline-none">
+                           <option>Dewasa</option><option>Anak-anak</option>
+                        </select>
+                        <select value={targetGender} onChange={e => setTargetGender(e.target.value as any)} className="bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-[10px] text-white font-black uppercase outline-none">
+                           <option>Wanita</option><option>Pria</option>
+                        </select>
                      </div>
                   </div>
-                  <div className="space-y-2">
-                     <label className="text-[8px] font-black uppercase text-slate-600 px-1">{t.age}</label>
-                     <div className="flex bg-black/40 p-1 rounded-xl border border-white/5">
-                        <button onClick={() => setTargetAge('Dewasa')} className={`flex-1 py-2 rounded-lg text-[9px] font-black transition-all ${targetAge === 'Dewasa' ? 'bg-white/10 text-white' : 'text-slate-600'}`}>{t.adult}</button>
-                        <button onClick={() => setTargetAge('Anak-anak')} className={`flex-1 py-2 rounded-lg text-[9px] font-black transition-all ${targetAge === 'Anak-anak' ? 'bg-white/10 text-white' : 'text-slate-600'}`}>{t.child}</button>
+                  <div className="space-y-4">
+                     <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-2">Referensi Visual (Wajib 1-3)</label>
+                     <div className="grid grid-cols-3 gap-3">
+                        {refImages.map((img, i) => (
+                           <div key={i} className="aspect-square rounded-2xl overflow-hidden border border-white/10 bg-black relative group shadow-xl">
+                              <img src={img} className="w-full h-full object-cover" />
+                              <button onClick={() => setRefImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute inset-0 bg-red-500/80 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all"><i className="fa-solid fa-trash text-white"></i></button>
+                           </div>
+                        ))}
+                        {refImages.length < 3 && (
+                           <label className="aspect-square rounded-2xl border-2 border-dashed border-white/5 flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 transition-all text-slate-700">
+                              <i className="fa-solid fa-plus text-lg"></i>
+                              <input type="file" multiple onChange={handleRefImage} className="hidden" accept="image/*" />
+                           </label>
+                        )}
                      </div>
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[8px] font-black uppercase text-slate-600 px-1">{t.camera}</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {cameraAngles.map(angle => (
-                      <button key={angle} onClick={() => setCameraAngle(angle)} className={`py-3 rounded-xl border text-[9px] font-black uppercase transition-all ${cameraAngle === angle ? 'bg-cyan-500 text-black border-cyan-400' : 'bg-black/40 text-slate-600 border-white/5'}`}>
-                        {angle}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <label className="text-[8px] font-black uppercase text-slate-600 px-1">{t.duration}</label>
-                    <div className="grid grid-cols-3 gap-1">
-                      {[8, 16, 32].map(d => (
-                        <button key={d} onClick={() => setDuration(d as any)} className={`py-2 rounded-lg border text-[9px] font-black transition-all ${duration === d ? 'bg-yellow-500 text-black border-yellow-400' : 'bg-black/40 text-slate-600 border-white/5'}`}>{d}D</button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[8px] font-black uppercase text-slate-600 px-1">{t.style}</label>
-                    <select value={videoStyle} onChange={e => setVideoStyle(e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl py-2 px-3 text-[10px] text-white font-black uppercase outline-none">
-                      {stylePresets.map(s => <option key={s.name}>{s.name}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  <label className="text-[8px] font-black uppercase text-slate-600 px-1">{t.ref}</label>
-                  <div className="grid grid-cols-3 gap-3">
-                    {refImages.map((img, i) => (
-                      <div key={i} className="aspect-square rounded-2xl overflow-hidden border border-white/10 bg-black relative group shadow-xl">
-                        <img src={img} className="w-full h-full object-cover" />
-                        <button onClick={() => setRefImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute inset-0 bg-red-500/80 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all">
-                           <i className="fa-solid fa-trash text-white text-xs"></i>
-                        </button>
-                      </div>
-                    ))}
-                    {refImages.length < 3 && (
-                      <label className="aspect-square rounded-2xl border-2 border-dashed border-white/5 flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 transition-all text-slate-700 hover:text-cyan-500">
-                        <i className="fa-solid fa-plus text-lg"></i>
-                        <input type="file" multiple onChange={handleRefImage} className="hidden" accept="image/*" />
-                      </label>
-                    )}
-                  </div>
-                </div>
-              </section>
-            </div>
-            <div className="lg:col-span-7 space-y-4">
-              <section className="glass-panel p-8 rounded-[3rem] bg-slate-900/40 space-y-6 shadow-2xl border-white/5 h-full flex flex-col">
-                <div className="flex-1 space-y-3">
-                  <label className="text-[10px] font-black uppercase text-yellow-500 tracking-[0.2em] px-1">{t.prompt}</label>
-                  <textarea value={title} onChange={e => setTitle(e.target.value)} placeholder="Tuliskan cerita pendek atau jelaskan keunggulan produk Master..." className="w-full h-full min-h-[400px] bg-black/60 border border-white/10 rounded-[2.5rem] p-8 text-sm text-white focus:border-yellow-500/50 outline-none resize-none leading-relaxed shadow-inner" />
-                </div>
-                <div className="space-y-6">
-                  <div className="p-6 rounded-[2.5rem] bg-yellow-500/5 border border-yellow-500/20 flex items-center justify-between">
-                    <div>
-                      <p className="text-[9px] font-black text-yellow-500 uppercase tracking-widest">{t.cost} ({ESTIMATED_SCENES} Adegan)</p>
-                      <p className="text-2xl font-black italic text-white leading-none">± {estimatedTotalCost} <span className="text-[10px] text-slate-500">CR</span></p>
-                    </div>
-                  </div>
-                  <button onClick={() => constructProject(0)} disabled={isProcessing || !title || credits < estimatedTotalCost} className="w-full py-6 bg-yellow-500 text-black font-black uppercase rounded-[2.5rem] hover:bg-white transition-all shadow-2xl active:scale-95 disabled:opacity-20 flex items-center justify-center gap-4 text-sm tracking-widest">
-                    {isProcessing ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-wand-magic-sparkles"></i>} {t.start}
+                  <button onClick={() => constructProject(0)} disabled={isProcessing || !title || refImages.length === 0} className="w-full py-6 bg-yellow-500 text-black font-black uppercase rounded-[2rem] hover:bg-white transition-all shadow-xl active:scale-95 disabled:opacity-20 text-[11px] tracking-widest">
+                     {isProcessing ? "MENGKONSTRUKSI CERITA..." : `BANGUN STORYBOARD (-${estimatedTotalCost} CR)`}
                   </button>
-                </div>
-              </section>
+               </div>
             </div>
           </motion.div>
         ) : (
-          <motion.div key="story" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-            {storyboard.map((s, i) => (
-              <div key={i} className="glass-panel p-6 rounded-[3rem] bg-black/40 border-white/5 space-y-5 shadow-2xl relative flex flex-col group hover:border-cyan-500/30 transition-all">
-                 <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                       <span className="w-9 h-9 rounded-full bg-yellow-500 text-black flex items-center justify-center text-[11px] font-black shadow-lg">#{i+1}</span>
-                       <span className="text-[10px] font-black text-white uppercase tracking-widest truncate">{s.scene}</span>
-                    </div>
-                    <span className="text-[8px] font-black text-slate-600 uppercase">{s.duration}D</span>
-                 </div>
-                 <div className="bg-black/60 p-5 rounded-[2rem] border border-white/5 flex-1">
-                    <p className="text-[11px] text-white font-bold leading-relaxed italic">"{s.audio}"</p>
-                    <div className="mt-4 flex gap-2">
-                       <button onClick={() => generateAudio(i)} disabled={s.isAudioLoading} className={`flex-1 py-3 rounded-xl text-[9px] font-black uppercase transition-all ${s.audioUrl ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'bg-white/5 text-slate-500 hover:text-white'}`}>
-                          {s.isAudioLoading ? 'PROSES...' : s.audioUrl ? 'SUARA_SIAP' : 'BUAT SUARA'}
-                       </button>
-                    </div>
-                 </div>
-                 <div className="aspect-video rounded-[2.5rem] bg-black relative overflow-hidden border border-white/5 shadow-inner">
-                    {s.videoUrl ? (
-                      <>
-                        <video src={s.videoUrl} autoPlay loop muted playsInline className="w-full h-full object-cover" />
-                        <a 
-                          href={s.videoUrl} 
-                          download={`satmoko_studio_scene_${i+1}.mp4`}
-                          className="absolute bottom-4 right-4 w-10 h-10 bg-cyan-500 text-black rounded-full flex items-center justify-center shadow-lg hover:bg-white transition-all z-20"
-                        >
-                          <i className="fa-solid fa-download"></i>
-                        </a>
-                      </>
-                    ) : (
-                      <div className="w-full h-full flex flex-col items-center justify-center opacity-10">
-                        <i className="fa-solid fa-clapperboard text-4xl"></i>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8">
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {storyboard.map((item, idx) => (
+                   <div key={idx} className="glass-panel rounded-[2.5rem] bg-slate-900/40 border-white/5 overflow-hidden flex flex-col shadow-2xl">
+                      <div className="aspect-video bg-black/60 relative overflow-hidden">
+                         {item.videoUrl ? (
+                            <video src={item.videoUrl} className="w-full h-full object-cover" controls />
+                         ) : (
+                            <div className="w-full h-full flex flex-col items-center justify-center text-slate-700 gap-4">
+                               <i className="fa-solid fa-film text-4xl"></i>
+                               <p className="text-[9px] font-black uppercase tracking-widest">Adegan {idx + 1}</p>
+                            </div>
+                         )}
+                         {item.isRendering && (
+                            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center">
+                               <i className="fa-solid fa-spinner fa-spin text-cyan-400 text-2xl mb-4"></i>
+                               <p className="text-[8px] font-black text-white uppercase tracking-[0.4em] animate-pulse">RENDERING...</p>
+                            </div>
+                         )}
                       </div>
-                    )}
-                    {s.isRendering && (
-                      <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center backdrop-blur-sm">
-                        <i className="fa-solid fa-microchip fa-spin text-cyan-500 text-2xl mb-3"></i>
-                        <p className="text-[9px] font-black text-cyan-500 uppercase tracking-widest animate-pulse">SEDANG_MERENDER</p>
+                      <div className="p-6 space-y-4 flex-1">
+                         <div>
+                            <p className="text-[10px] font-black text-yellow-500 uppercase tracking-widest mb-1">{item.scene}</p>
+                            <p className="text-[9px] text-slate-400 leading-relaxed line-clamp-2">{item.visual}</p>
+                         </div>
+                         <div className="flex gap-2">
+                            <button onClick={() => generateAudio(idx)} disabled={item.isAudioLoading || !!item.audioUrl} className={`flex-1 py-3 rounded-xl border text-[8px] font-black uppercase transition-all ${item.audioUrl ? 'bg-green-500/10 border-green-500/20 text-green-500' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white'}`}>
+                               {item.isAudioLoading ? "LOAD..." : item.audioUrl ? "VOICE OK" : "GEN AUDIO"}
+                            </button>
+                            <button onClick={() => renderVideo(idx)} disabled={item.isRendering || !!item.videoUrl || !item.audioUrl} className={`flex-1 py-3 rounded-xl border text-[8px] font-black uppercase transition-all ${item.videoUrl ? 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400' : 'bg-yellow-500 text-black border-yellow-400 hover:bg-white'}`}>
+                               {item.isRendering ? "RENDER..." : item.videoUrl ? "VIDEO OK" : "GEN VIDEO"}
+                            </button>
+                         </div>
+                         {item.audioUrl && <audio src={item.audioUrl} controls className="w-full h-8 opacity-40 hover:opacity-100 transition-opacity" />}
                       </div>
-                    )}
-                 </div>
-                 <button onClick={() => renderVideo(i)} disabled={s.isRendering || credits < costPerScene} className={`w-full py-5 rounded-[1.8rem] text-[10px] font-black uppercase transition-all shadow-xl active:scale-95 ${s.videoUrl ? 'bg-green-900/40 text-green-400 border border-green-500/30' : s.isRendering ? 'bg-slate-800 text-cyan-500 cursor-not-allowed' : 'bg-white text-black hover:bg-cyan-500'}`}>
-                    {s.videoUrl ? '✓ RENDER ULANG' : s.isRendering ? 'PROSES' : `RENDER VIDEO (${costPerScene} CR)`}
-                 </button>
-              </div>
-            ))}
+                   </div>
+                ))}
+             </div>
+             <button onClick={() => setStep('input')} className="px-8 py-4 rounded-2xl bg-white/5 text-slate-600 font-black uppercase text-[10px] tracking-widest hover:text-white transition-all">BUAT PROYEK BARU</button>
           </motion.div>
         )}
       </AnimatePresence>
